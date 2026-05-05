@@ -4,1011 +4,1440 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuickPaste — Temporary Note Pad</title>
-    <meta name="description"
-        content="A temporary note-taking web page for accumulating voice-to-text snippets sequentially.">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- KaTeX for LaTeX rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+    <title>LaTeX Image Studio</title>
+    <meta name="description" content="Render LaTeX equations and export transparent PNG or SVG images.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        window.MathJax = {
+            loader: { load: ['[tex]/ams', '[tex]/boldsymbol', '[tex]/color'] },
+            startup: { typeset: false },
+            tex: {
+                packages: { '[+]': ['ams', 'boldsymbol', 'color'] },
+                macros: {
+                    mb: ['\\mathbf{#1}', 1],
+                    bs: ['\\boldsymbol{#1}', 1],
+                    bm: ['\\boldsymbol{#1}', 1],
+                    mc: ['\\mathcal{#1}', 1],
+                    mr: ['\\mathrm{#1}', 1],
+                    mbb: ['\\mathbb{#1}', 1],
+                    R: '\\mathbb{R}',
+                    N: '\\mathbb{N}',
+                    Z: '\\mathbb{Z}',
+                    T: '\\mathsf{T}'
+                }
+            },
+            svg: { fontCache: 'none' }
+        };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
-        /* ── Reset & Variables ─────────────────────────────── */
         *,
         *::before,
         *::after {
             box-sizing: border-box;
-            margin: 0;
-            padding: 0;
         }
 
         :root {
-            --bg: #0f0f1a;
-            --surface: rgba(255, 255, 255, 0.04);
-            --surface-hover: rgba(255, 255, 255, 0.07);
-            --glass: rgba(255, 255, 255, 0.06);
-            --glass-border: rgba(255, 255, 255, 0.10);
-            --accent: #7c6aff;
-            --accent-glow: rgba(124, 106, 255, 0.35);
-            --accent2: #38bdf8;
-            --accent2-glow: rgba(56, 189, 248, 0.25);
+            --bg: #101317;
+            --panel: #171b21;
+            --panel-strong: #1d232b;
+            --panel-soft: #222933;
+            --border: #303946;
+            --border-strong: #425063;
+            --text: #edf2f7;
+            --muted: #9aa8b7;
+            --subtle: #718093;
+            --accent: #2dd4bf;
+            --accent-strong: #14b8a6;
+            --accent-soft: rgba(45, 212, 191, 0.14);
+            --warning: #f59e0b;
             --danger: #f87171;
-            --danger-glow: rgba(248, 113, 113, 0.25);
-            --success: #4ade80;
-            --text: #e2e8f0;
-            --text-dim: #94a3b8;
-            --text-muted: #64748b;
-            --radius: 16px;
-            --radius-sm: 10px;
-            --transition: 0.25s cubic-bezier(.4, 0, .2, 1);
+            --success: #86efac;
+            --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+            --radius: 8px;
+            --transition: 180ms ease;
         }
 
         html {
-            scroll-behavior: smooth;
+            min-height: 100%;
+            background: var(--bg);
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text);
             min-height: 100vh;
+            margin: 0;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text);
+            background:
+                linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+                var(--bg);
+            background-size: 32px 32px;
+        }
+
+        button,
+        textarea,
+        input,
+        select {
+            font: inherit;
+        }
+
+        button {
+            border: 0;
+        }
+
+        .app {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 40px;
+        }
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.1rem;
+            line-height: 1.05;
+            letter-spacing: 0;
+        }
+
+        .status-pill {
+            min-width: 150px;
+            max-width: 360px;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(23, 27, 33, 0.82);
+            color: var(--muted);
+            font-size: 0.82rem;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-pill.good {
+            border-color: rgba(134, 239, 172, 0.35);
+            color: var(--success);
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .status-pill.error {
+            border-color: rgba(248, 113, 113, 0.38);
+            color: var(--danger);
+            background: rgba(248, 113, 113, 0.08);
+        }
+
+        .studio {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: rgba(23, 27, 33, 0.94);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+            gap: 12px;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(29, 35, 43, 0.82);
+        }
+
+        .control {
+            min-width: 0;
             display: flex;
             flex-direction: column;
-            overflow-x: hidden;
+            gap: 7px;
         }
 
-        /* ── Background Decoration ─────────────────────────── */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background:
-                radial-gradient(ellipse 600px 400px at 20% 10%, var(--accent-glow) 0%, transparent 70%),
-                radial-gradient(ellipse 500px 350px at 80% 90%, var(--accent2-glow) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* ── Header ────────────────────────────────────────── */
-        header {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            padding: 48px 24px 20px;
-        }
-
-        header h1 {
-            font-size: 2.4rem;
+        label,
+        .group-title {
+            color: var(--muted);
+            font-size: 0.76rem;
             font-weight: 700;
-            letter-spacing: -0.03em;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            letter-spacing: 0;
         }
 
-        header p {
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-top: 6px;
-            font-weight: 300;
-        }
-
-        /* ── Main Layout ───────────────────────────────────── */
-        main {
-            position: relative;
-            z-index: 1;
-            max-width: 1000px;
+        select,
+        .color-text {
             width: 100%;
-            margin: 0 auto;
-            padding: 0 24px 64px;
+            min-height: 40px;
+            padding: 0 11px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            background: #11161c;
+            outline: none;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+
+        select:focus,
+        .color-text:focus,
+        textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        .color-row {
+            display: grid;
+            grid-template-columns: 44px minmax(76px, 1fr);
+            gap: 8px;
+        }
+
+        input[type="color"] {
+            width: 44px;
+            min-height: 40px;
+            padding: 3px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: #11161c;
+            cursor: pointer;
+        }
+
+        .color-text {
+            text-transform: uppercase;
+        }
+
+        .control.disabled {
+            opacity: 0.55;
+        }
+
+        .control.disabled input {
+            cursor: not-allowed;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(330px, 1fr);
+            min-height: 500px;
+        }
+
+        .pane {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pane + .pane {
+            border-left: 1px solid var(--border);
+        }
+
+        .pane-header {
+            min-height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(19, 24, 30, 0.72);
+        }
+
+        .pane-title {
+            color: var(--text);
+            font-size: 0.94rem;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .mini-actions,
+        .button-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .editor-wrap,
+        .preview-wrap {
+            min-height: 0;
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 32px;
         }
 
-        /* ── Glass Card ────────────────────────────────────── */
-        .card {
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius);
-            padding: 32px;
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            transition: border-color var(--transition);
-        }
-
-        .card:hover {
-            border-color: rgba(255, 255, 255, 0.16);
-        }
-
-        .card-title {
-            font-size: 0.88rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            margin-bottom: 14px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .card-title .icon {
-            font-size: 1.1rem;
-        }
-
-        /* ── Textarea ──────────────────────────────────────── */
-        #inputArea {
+        #latexSource {
+            flex: 1;
+            min-height: 400px;
             width: 100%;
-            min-height: 200px;
-            background: var(--surface);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            color: var(--text);
-            font-family: inherit;
-            font-size: 1rem;
-            line-height: 1.7;
             padding: 18px;
             resize: vertical;
-            transition: border-color var(--transition), box-shadow var(--transition);
+            border: 0;
+            border-radius: 0;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+            background: #11161c;
             outline: none;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: 0.98rem;
+            line-height: 1.7;
+            tab-size: 4;
         }
 
-        #inputArea:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
+        #latexSource::placeholder {
+            color: var(--subtle);
         }
 
-        #inputArea::placeholder {
-            color: var(--text-muted);
-        }
-
-        /* ── Buttons ───────────────────────────────────────── */
-        .btn-row {
+        .meta-row {
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 14px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 16px;
+            color: var(--subtle);
+            background: rgba(17, 22, 28, 0.76);
+            font-size: 0.78rem;
+        }
+
+        .preview-surface {
+            min-height: 400px;
+            flex: 1;
+            overflow: auto;
+            background-color: #f8fafc;
+            background-image:
+                linear-gradient(45deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, rgba(15, 23, 42, 0.08) 75%),
+                linear-gradient(-45deg, transparent 75%, rgba(15, 23, 42, 0.08) 75%);
+            background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+            background-size: 24px 24px;
+        }
+
+        #previewStage {
+            min-width: 100%;
+            min-height: 100%;
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #111827;
+        }
+
+        #previewStage svg {
+            flex: 0 0 auto;
+            overflow: visible;
+        }
+
+        .placeholder,
+        .render-error {
+            max-width: 420px;
+            padding: 0 18px;
+            color: #334155;
+            line-height: 1.55;
+            text-align: center;
+            font-size: 0.92rem;
+        }
+
+        .render-error {
+            color: #b91c1c;
         }
 
         .btn {
+            min-height: 38px;
+            padding: 0 14px;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            font-weight: 500;
-            border: none;
-            border-radius: 10px;
-            padding: 12px 24px;
+            justify-content: center;
+            gap: 7px;
+            border-radius: var(--radius);
+            color: var(--text);
+            background: var(--panel-soft);
+            border: 1px solid var(--border);
             cursor: pointer;
-            transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+            font-size: 0.86rem;
+            font-weight: 700;
+            transition: transform var(--transition), border-color var(--transition), background var(--transition);
+        }
+
+        .btn:hover {
+            border-color: var(--border-strong);
+            background: #28313d;
         }
 
         .btn:active {
-            transform: scale(0.96);
+            transform: translateY(1px);
         }
 
-        .btn .icon {
-            font-size: 1.1rem;
+        .btn.primary {
+            color: #042f2e;
+            background: var(--accent);
+            border-color: var(--accent);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), #9b8aff);
-            color: #fff;
-            box-shadow: 0 4px 20px var(--accent-glow);
+        .btn.primary:hover {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
         }
 
-        .btn-primary:hover {
-            box-shadow: 0 6px 28px var(--accent-glow);
+        .btn.success {
+            color: #052e16;
+            background: var(--success);
+            border-color: var(--success);
         }
 
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text-dim);
-            border: 1px solid var(--glass-border);
+        .btn.warning {
+            color: #1f1300;
+            background: var(--warning);
+            border-color: var(--warning);
         }
 
-        .btn-secondary:hover {
-            background: var(--surface-hover);
-            color: var(--text);
+        .btn.small {
+            min-height: 32px;
+            padding: 0 10px;
+            font-size: 0.78rem;
         }
 
-        .btn-danger {
-            background: rgba(248, 113, 113, 0.12);
-            color: var(--danger);
-            border: 1px solid rgba(248, 113, 113, 0.2);
+        .btn.ghost {
+            color: var(--muted);
+            background: transparent;
         }
 
-        .btn-danger:hover {
-            background: rgba(248, 113, 113, 0.2);
+        .btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        .btn-success {
-            background: rgba(74, 222, 128, 0.12);
-            color: var(--success);
-            border: 1px solid rgba(74, 222, 128, 0.2);
+        .tools-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+            gap: 14px;
+            margin-top: 14px;
         }
 
-        .btn-success:hover {
-            background: rgba(74, 222, 128, 0.2);
+        .utility-panel {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: rgba(23, 27, 33, 0.9);
+            padding: 14px;
         }
 
-        .btn-sm {
-            padding: 8px 16px;
-            font-size: 0.82rem;
-            border-radius: 8px;
-        }
-
-        /* ── Big Copy Button ─────────────────────────────── */
-        .btn-copy-main {
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-            color: #fff;
-            font-size: 1rem;
-            font-weight: 600;
-            padding: 14px 32px;
-            border-radius: 12px;
-            box-shadow: 0 4px 24px rgba(34, 197, 94, 0.35);
-            width: 100%;
-            justify-content: center;
-            margin-top: 16px;
-        }
-
-        .btn-copy-main:hover {
-            box-shadow: 0 6px 32px rgba(34, 197, 94, 0.5);
-        }
-
-        .btn-copy-main .icon {
-            font-size: 1.2rem;
-        }
-
-        /* ── Notes List ────────────────────────────────────── */
-        .notes-header {
+        .utility-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
+            justify-content: space-between;
             gap: 10px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
 
-        .notes-header .card-title {
-            margin-bottom: 0;
+        .snippet-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
         }
 
-        #notesList {
+        .snippet-btn,
+        .recent-btn {
+            min-width: 0;
+            padding: 9px 10px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: #11161c;
+            color: var(--text);
+            cursor: pointer;
+            text-align: left;
+            font-weight: 700;
+            transition: border-color var(--transition), background var(--transition);
+        }
+
+        .snippet-btn:hover,
+        .recent-btn:hover {
+            border-color: var(--accent);
+            background: rgba(45, 212, 191, 0.08);
+        }
+
+        .snippet-btn span {
+            display: block;
+            color: var(--subtle);
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: 0.72rem;
+            font-weight: 500;
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .example-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+
+        .recent-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
+            max-height: 248px;
+            overflow: auto;
         }
 
-        .note-item {
-            background: var(--surface);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            padding: 20px;
-            position: relative;
-            animation: noteIn 0.35s ease-out;
-            transition: border-color var(--transition);
-        }
-
-        .note-item:hover {
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        @keyframes noteIn {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .note-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .note-time {
-            font-size: 0.72rem;
-            color: var(--text-muted);
+        .recent-btn {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: 0.78rem;
             font-weight: 500;
-            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .note-number {
-            font-size: 0.72rem;
-            font-weight: 600;
-            color: var(--accent);
-            background: rgba(124, 106, 255, 0.12);
-            padding: 2px 8px;
-            border-radius: 6px;
-        }
-
-        .note-text {
-            font-size: 0.95rem;
-            line-height: 1.7;
-            color: var(--text);
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .note-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 10px;
-        }
-
-        /* ── Combined Text ─────────────────────────────────── */
-        #combinedCard {
-            display: none;
-        }
-
-        #combinedCard.visible {
-            display: block;
-        }
-
-        #combinedText {
-            width: 100%;
-            min-height: 180px;
-            background: var(--surface);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            color: var(--text);
-            font-family: inherit;
-            font-size: 1rem;
-            line-height: 1.7;
-            padding: 18px;
-            resize: vertical;
-            outline: none;
-            cursor: default;
-        }
-
-        /* ── Empty State ───────────────────────────────────── */
-        .empty-state {
+        .empty-recent {
+            padding: 20px 8px;
+            color: var(--subtle);
+            font-size: 0.84rem;
             text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
         }
 
-        .empty-state .emoji {
-            font-size: 2.4rem;
-            margin-bottom: 10px;
-        }
-
-        .empty-state p {
-            font-size: 0.9rem;
-        }
-
-        /* ── Toast ─────────────────────────────────────────── */
         .toast-container {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 999;
+            right: 20px;
+            bottom: 20px;
+            z-index: 20;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
 
         .toast {
-            background: rgba(30, 30, 50, 0.92);
-            border: 1px solid var(--glass-border);
+            max-width: 360px;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
             color: var(--text);
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            backdrop-filter: blur(12px);
-            animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 2s forwards;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            background: rgba(17, 22, 28, 0.95);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.32);
+            animation: toastIn 180ms ease, toastOut 220ms ease 2.4s forwards;
+            font-size: 0.86rem;
         }
 
         @keyframes toastIn {
             from {
                 opacity: 0;
-                transform: translateY(16px) scale(0.95);
+                transform: translateY(8px);
             }
 
             to {
                 opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: translateY(0);
             }
         }
 
         @keyframes toastOut {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-
             to {
                 opacity: 0;
                 transform: translateY(-8px);
             }
         }
 
-        /* ── Keyboard Shortcut Hint ─────────────────────────── */
-        .shortcut-hints {
-            text-align: center;
-            margin-top: -10px;
+        @media (max-width: 920px) {
+            .toolbar,
+            .workspace,
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pane + .pane {
+                border-left: 0;
+                border-top: 1px solid var(--border);
+            }
+
+            .snippet-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
-        .shortcut-hints kbd {
-            display: inline-block;
-            background: var(--surface);
-            border: 1px solid var(--glass-border);
-            border-radius: 5px;
-            padding: 2px 7px;
-            font-family: inherit;
-            font-size: 0.72rem;
-            color: var(--text-muted);
-        }
-
-        .shortcut-hints span {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        /* ── Separator / Joiner Select ──────────────────────── */
-        .join-options {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.82rem;
-            color: var(--text-dim);
-        }
-
-        .join-options select {
-            background: #1e1e2e;
-            border: 1px solid var(--glass-border);
-            color: var(--text);
-            padding: 5px 10px;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 0.82rem;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .join-options select option {
-            background: #1e1e2e;
-            color: var(--text);
-        }
-
-        /* ── Responsive ────────────────────────────────────── */
         @media (max-width: 600px) {
-            header h1 {
-                font-size: 1.8rem;
+            .app {
+                width: min(100% - 20px, 1180px);
+                padding-top: 18px;
             }
 
-            main {
-                padding: 0 14px 48px;
+            h1 {
+                font-size: 1.55rem;
             }
 
-            .card {
-                padding: 20px;
-            }
-
-            .btn-row {
+            .app-header {
+                align-items: flex-start;
                 flex-direction: column;
             }
 
+            .status-pill {
+                width: 100%;
+                max-width: none;
+            }
+
+            .toolbar {
+                padding: 12px;
+            }
+
+            .pane-header,
+            .meta-row {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .mini-actions,
+            .button-row,
             .btn {
                 width: 100%;
-                justify-content: center;
             }
 
-            .btn-copy-main {
-                padding: 14px 20px;
+            .snippet-grid,
+            .example-row {
+                grid-template-columns: 1fr;
             }
-        }
-
-        /* ── Drag indicator ────────────────────────────────── */
-        .note-item.dragging {
-            opacity: 0.5;
-            border-color: var(--accent);
-        }
-
-        .note-item.drag-over {
-            border-color: var(--accent2);
-            box-shadow: 0 0 0 2px var(--accent2-glow);
-        }
-
-        /* ── Character count ───────────────────────────────── */
-        .char-count {
-            text-align: right;
-            font-size: 0.72rem;
-            color: var(--text-muted);
-            margin-top: 6px;
-        }
-
-        /* ── LaTeX Rendering ───────────────────────────────── */
-        .note-text .katex-display {
-            margin: 12px 0;
-            padding: 10px 14px;
-            background: rgba(124, 106, 255, 0.06);
-            border-left: 3px solid var(--accent);
-            border-radius: 6px;
-            overflow-x: auto;
-        }
-
-        .note-text .katex {
-            font-size: 1.1em;
-            color: var(--text);
-        }
-
-        /* ── LaTeX Preview ─────────────────────────────────── */
-        #latexPreview {
-            display: none;
-            margin-top: 10px;
-            padding: 14px 18px;
-            background: var(--surface);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            font-size: 0.95rem;
-            line-height: 1.7;
-            color: var(--text);
-            min-height: 40px;
-        }
-
-        #latexPreview.visible {
-            display: block;
-        }
-
-        #latexPreview .katex-display {
-            margin: 8px 0;
-            padding: 8px 12px;
-            background: rgba(124, 106, 255, 0.06);
-            border-left: 3px solid var(--accent);
-            border-radius: 6px;
-            overflow-x: auto;
-        }
-
-        .preview-label {
-            display: none;
-            font-size: 0.72rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            margin-top: 10px;
-            margin-bottom: 4px;
-        }
-
-        .preview-label.visible {
-            display: block;
-        }
-
-        /* ── Footer ────────────────────────────────────────── */
-        footer {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            padding: 20px;
-            color: var(--text-muted);
-            font-size: 0.75rem;
         }
     </style>
 </head>
 
 <body>
+    <div class="app">
+        <header class="app-header">
+            <h1>LaTeX Image Studio</h1>
+            <div class="status-pill" id="renderStatus" aria-live="polite">Loading renderer...</div>
+        </header>
 
-    <header>
-        <h1>✦ QuickPaste</h1>
-        <p>Accumulate your voice-to-text snippets — never lose a word.</p>
-    </header>
+        <main>
+            <section class="studio" aria-label="LaTeX image studio">
+                <div class="toolbar">
+                    <div class="control">
+                        <label for="formulaColor">Color</label>
+                        <div class="color-row">
+                            <input type="color" id="formulaColor" value="#111827" title="Formula color">
+                            <input type="text" class="color-text" id="formulaColorText" value="#111827" maxlength="7"
+                                spellcheck="false" aria-label="Formula color hex value">
+                        </div>
+                    </div>
 
-    <main>
-
-        <!-- ── Input Card ──────────────────────────────── -->
-        <section class="card" id="inputCard">
-            <div class="card-title"><span class="icon">📝</span> Paste or Type Your Text</div>
-            <textarea id="inputArea"
-                placeholder="Paste your voice-to-text output here… (LaTeX supported: $...$, $$...$$)"
-                spellcheck="false"></textarea>
-            <div class="char-count"><span id="charCount">0</span> characters</div>
-            <div class="preview-label" id="previewLabel">⚡ LaTeX Preview</div>
-            <div id="latexPreview"></div>
-            <div class="btn-row">
-                <button class="btn btn-primary" id="addBtn" title="Add note (Ctrl+Enter)">
-                    <span class="icon">➕</span> Add to Notes
-                </button>
-                <button class="btn btn-secondary" id="clearInputBtn" title="Clear input">
-                    <span class="icon">🗑️</span> Clear
-                </button>
-            </div>
-            <div class="shortcut-hints" style="margin-top: 10px;">
-                <kbd>Ctrl</kbd> + <kbd>Enter</kbd> <span>to add quickly</span>
-            </div>
-        </section>
-
-        <!-- ── Combined Text Card ──────────────────────── -->
-        <section class="card" id="combinedCard">
-            <div class="notes-header">
-                <div class="card-title"><span class="icon">📋</span> Combined Text</div>
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <div class="join-options">
-                        <label for="separator">Join with:</label>
-                        <select id="separator">
-                            <option value=" ">Space</option>
-                            <option value="\n">New Line</option>
-                            <option value="\n\n" selected>Double New Line</option>
-                            <option value=" — ">Dash</option>
-                            <option value=". ">Period + Space</option>
+                    <div class="control">
+                        <label for="backgroundMode">Background</label>
+                        <select id="backgroundMode">
+                            <option value="transparent" selected>Transparent</option>
+                            <option value="solid">Solid Color</option>
                         </select>
                     </div>
-                    <button class="btn btn-success btn-sm" id="copyCombinedBtn">
-                        <span class="icon">📋</span> Copy All
-                    </button>
-                </div>
-            </div>
-            <textarea id="combinedText" readonly></textarea>
-            <div class="char-count">Combined: <span id="combinedCharCount">0</span> characters</div>
-            <button class="btn btn-copy-main" id="copyMergedBtn">
-                <span class="icon">📋</span> Copy Merged Text
-            </button>
-            <div class="shortcut-hints" style="margin-top: 8px;">
-                <kbd>Ctrl</kbd> + <kbd>C</kbd> <span>to copy merged text instantly</span>
-            </div>
-        </section>
 
-        <!-- ── Notes List Card ─────────────────────────── -->
-        <section class="card">
-            <div class="notes-header">
-                <div class="card-title"><span class="icon">📌</span> Saved Snippets (<span id="notesCount">0</span>)
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-danger btn-sm" id="clearAllBtn" style="display:none;">
-                        <span class="icon">🗑️</span> Clear All
-                    </button>
-                </div>
-            </div>
-            <div id="notesList">
-                <div class="empty-state" id="emptyState">
-                    <div class="emoji">📭</div>
-                    <p>No snippets yet. Paste text above and click <strong>Add to Notes</strong>.</p>
-                </div>
-            </div>
-        </section>
+                    <div class="control" id="backgroundColorControl">
+                        <label for="backgroundColor">Background Color</label>
+                        <div class="color-row">
+                            <input type="color" id="backgroundColor" value="#ffffff" title="Background color">
+                            <input type="text" class="color-text" id="backgroundColorText" value="#FFFFFF" maxlength="7"
+                                spellcheck="false" aria-label="Background color hex value">
+                        </div>
+                    </div>
 
-    </main>
+                    <div class="control">
+                        <label for="displayMode">Mode</label>
+                        <select id="displayMode">
+                            <option value="auto" selected>Auto</option>
+                            <option value="display">Display</option>
+                            <option value="inline">Inline</option>
+                        </select>
+                    </div>
 
-    <footer>
-        QuickPaste &mdash; Your temporary note accumulator. Data stored in your browser only.
-    </footer>
+                    <div class="control">
+                        <label for="formulaSize">Size</label>
+                        <select id="formulaSize">
+                            <option value="100" selected>100%</option>
+                            <option value="125">125%</option>
+                            <option value="150">150%</option>
+                            <option value="200">200%</option>
+                            <option value="300">300%</option>
+                        </select>
+                    </div>
+
+                    <div class="control">
+                        <label for="exportPadding">Padding</label>
+                        <select id="exportPadding">
+                            <option value="0">0 px</option>
+                            <option value="12">12 px</option>
+                            <option value="24" selected>24 px</option>
+                            <option value="40">40 px</option>
+                            <option value="64">64 px</option>
+                        </select>
+                    </div>
+
+                    <div class="control">
+                        <label for="pngScale">PNG Scale</label>
+                        <select id="pngScale">
+                            <option value="1">1x</option>
+                            <option value="2" selected>2x</option>
+                            <option value="3">3x</option>
+                            <option value="4">4x</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="workspace">
+                    <section class="pane" aria-label="LaTeX source">
+                        <div class="pane-header">
+                            <div class="pane-title">Source</div>
+                            <div class="mini-actions">
+                                <button class="btn small ghost" id="copySourceBtn" type="button">Copy Source</button>
+                                <button class="btn small ghost" id="clearSourceBtn" type="button">Clear</button>
+                            </div>
+                        </div>
+                        <div class="editor-wrap">
+                            <textarea id="latexSource" spellcheck="false"
+                                placeholder="\frac{d}{dx}\left(e^{x^2}\right)=2xe^{x^2}">\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}</textarea>
+                            <div class="meta-row">
+                                <span><span id="charCount">0</span> characters</span>
+                                <span id="sourceMode">Display math</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="pane" aria-label="Rendered output">
+                        <div class="pane-header">
+                            <div class="pane-title">Rendered Image</div>
+                            <div class="mini-actions">
+                                <button class="btn small ghost" id="copySvgCodeBtn" type="button">Copy SVG Code</button>
+                            </div>
+                        </div>
+                        <div class="preview-wrap">
+                            <div class="preview-surface">
+                                <div id="previewStage">
+                                    <div class="placeholder">Loading renderer...</div>
+                                </div>
+                            </div>
+                            <div class="meta-row">
+                                <span id="imageSize">0 x 0 px</span>
+                                <span id="backgroundLabel">Transparent background</span>
+                            </div>
+                            <div class="pane-header">
+                                <div class="button-row">
+                                    <button class="btn success" id="copyPngBtn" type="button" title="Copy PNG to clipboard">
+                                        Copy PNG
+                                    </button>
+                                    <button class="btn primary" id="downloadPngBtn" type="button">Export PNG</button>
+                                    <button class="btn" id="downloadSvgBtn" type="button">Export SVG</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <div class="tools-grid">
+                <section class="utility-panel" aria-label="Practice snippets">
+                    <div class="utility-header">
+                        <div class="group-title">Snippets</div>
+                    </div>
+                    <div class="snippet-grid" id="snippetGrid"></div>
+                </section>
+
+                <section class="utility-panel" aria-label="Examples">
+                    <div class="utility-header">
+                        <div class="group-title">Examples</div>
+                    </div>
+                    <div class="example-row">
+                        <select id="exampleSelect" aria-label="Example formula"></select>
+                        <button class="btn" id="loadExampleBtn" type="button">Load</button>
+                    </div>
+                </section>
+
+                <section class="utility-panel" aria-label="Recent formulas">
+                    <div class="utility-header">
+                        <div class="group-title">Recent</div>
+                        <button class="btn small ghost" id="clearRecentBtn" type="button">Clear</button>
+                    </div>
+                    <div class="recent-list" id="recentList"></div>
+                </section>
+            </div>
+        </main>
+    </div>
 
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // ── State ──────────────────────────────────────────
-        const STORAGE_KEY = 'quickpaste_notes';
-        let notes = loadNotes();
-
-        // ── DOM Refs ──────────────────────────────────────
-        const inputArea = document.getElementById('inputArea');
-        const charCount = document.getElementById('charCount');
-        const addBtn = document.getElementById('addBtn');
-        const clearInputBtn = document.getElementById('clearInputBtn');
-        const notesList = document.getElementById('notesList');
-        const notesCount = document.getElementById('notesCount');
-        const emptyState = document.getElementById('emptyState');
-        const clearAllBtn = document.getElementById('clearAllBtn');
-        const combinedCard = document.getElementById('combinedCard');
-        const combinedText = document.getElementById('combinedText');
-        const combinedCharCnt = document.getElementById('combinedCharCount');
-        const copyCombinedBtn = document.getElementById('copyCombinedBtn');
-        const separatorSelect = document.getElementById('separator');
-
-        // ── Init ──────────────────────────────────────────
-        renderNotes();
-        inputArea.focus();
-
-        // ── Event Listeners ───────────────────────────────
-        const latexPreview = document.getElementById('latexPreview');
-        const previewLabel = document.getElementById('previewLabel');
-
-        inputArea.addEventListener('input', () => {
-            charCount.textContent = inputArea.value.length;
-            updateLatexPreview();
-        });
-
-        addBtn.addEventListener('click', addNote);
-        clearInputBtn.addEventListener('click', () => {
-            inputArea.value = '';
-            charCount.textContent = '0';
-            updateLatexPreview();
-            inputArea.focus();
-        });
-
-        clearAllBtn.addEventListener('click', () => {
-            notes = [];
-            saveNotes();
-            renderNotes();
-            toast('All snippets cleared');
-        });
-
-        copyCombinedBtn.addEventListener('click', copyCombined);
-
-        const copyMergedBtn = document.getElementById('copyMergedBtn');
-        copyMergedBtn.addEventListener('click', copyCombined);
-
-        separatorSelect.addEventListener('change', updateCombined);
-
-        function copyCombined() {
-            const text = combinedText.value;
-            if (!text) {
-                toast('No merged text to copy yet.');
-                return;
-            }
-            navigator.clipboard.writeText(text).then(() => toast('Merged text copied to clipboard! ✅'));
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Ctrl+Enter: add note
-            if (e.ctrlKey && !e.shiftKey && e.key === 'Enter') {
-                e.preventDefault();
-                addNote();
-            }
-            // Ctrl+C: copy merged text (when nothing is selected)
-            if (e.ctrlKey && !e.shiftKey && (e.key === 'C' || e.key === 'c') && !window.getSelection().toString()) {
-                e.preventDefault();
-                copyCombined();
-            }
-        });
-
-        // ── Core Functions ────────────────────────────────
-        function addNote() {
-            const text = inputArea.value.trim();
-            if (!text) {
-                toast('Nothing to add — paste some text first.');
-                inputArea.focus();
-                return;
-            }
-            const note = {
-                id: Date.now() + Math.random().toString(36).slice(2, 6),
-                text,
-                timestamp: new Date().toISOString()
-            };
-            notes.push(note);
-            saveNotes();
-            renderNotes();
-            inputArea.value = '';
-            charCount.textContent = '0';
-            inputArea.focus();
-            toast('Snippet added! 📌');
-        }
-
-        function deleteNote(id) {
-            notes = notes.filter(n => n.id !== id);
-            saveNotes();
-            renderNotes();
-            toast('Snippet removed');
-        }
-
-        function copyNote(id) {
-            const note = notes.find(n => n.id === id);
-            if (!note) return;
-            navigator.clipboard.writeText(note.text).then(() => toast('Copied! ✅'));
-        }
-
-        function editNote(id) {
-            const note = notes.find(n => n.id === id);
-            if (!note) return;
-            const el = document.querySelector(`[data-id="${id}"] .note-text`);
-            if (!el) return;
-
-            const textarea = document.createElement('textarea');
-            textarea.value = note.text;
-            textarea.style.cssText = `
-        width:100%; min-height:80px; background:var(--surface);
-        border:1px solid var(--accent); border-radius:8px;
-        color:var(--text); font-family:inherit; font-size:0.92rem;
-        line-height:1.7; padding:12px; resize:vertical; outline:none;
-      `;
-            el.replaceWith(textarea);
-            textarea.focus();
-
-            const saveEdit = () => {
-                const newText = textarea.value.trim();
-                if (newText) {
-                    note.text = newText;
-                    saveNotes();
-                }
-                renderNotes();
-            };
-
-            textarea.addEventListener('blur', saveEdit);
-            textarea.addEventListener('keydown', (e) => {
-                if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); saveEdit(); }
-                if (e.key === 'Escape') { renderNotes(); }
-            });
-        }
-
-        // ── Rendering ─────────────────────────────────────
-        function renderNotes() {
-            notesList.innerHTML = '';
-            notesCount.textContent = notes.length;
-
-            if (notes.length === 0) {
-                notesList.innerHTML = `
-          <div class="empty-state" id="emptyState">
-            <div class="emoji">📭</div>
-            <p>No snippets yet. Paste text above and click <strong>Add to Notes</strong>.</p>
-          </div>`;
-                clearAllBtn.style.display = 'none';
-                combinedCard.classList.remove('visible');
-                return;
-            }
-
-            clearAllBtn.style.display = '';
-            combinedCard.classList.add('visible');
-
-            notes.forEach((note, idx) => {
-                const el = document.createElement('div');
-                el.className = 'note-item';
-                el.setAttribute('data-id', note.id);
-                el.draggable = true;
-
-                const time = new Date(note.timestamp);
-                const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const dateStr = time.toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-                el.innerHTML = `
-          <div class="note-meta">
-            <span class="note-number">#${idx + 1}</span>
-            <span class="note-time">${dateStr} · ${timeStr}</span>
-          </div>
-          <div class="note-text">${escapeHtml(note.text)}</div>
-          <div class="note-actions">
-            <button class="btn btn-secondary btn-sm" onclick="copyNote('${note.id}')" title="Copy">
-              <span class="icon">📋</span> Copy
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="editNote('${note.id}')" title="Edit">
-              <span class="icon">✏️</span> Edit
-            </button>
-            <button class="btn btn-danger btn-sm" onclick="deleteNote('${note.id}')" title="Delete">
-              <span class="icon">✕</span>
-            </button>
-          </div>`;
-
-                // Drag & Drop
-                el.addEventListener('dragstart', (e) => {
-                    el.classList.add('dragging');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', note.id);
-                });
-                el.addEventListener('dragend', () => el.classList.remove('dragging'));
-                el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag-over'); });
-                el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
-                el.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    el.classList.remove('drag-over');
-                    const draggedId = e.dataTransfer.getData('text/plain');
-                    reorderNotes(draggedId, note.id);
-                });
-
-                notesList.appendChild(el);
-            });
-
-            updateCombined();
-            // Render LaTeX in all notes after DOM is ready
-            renderLatexInNotes();
-        }
-
-        function reorderNotes(draggedId, targetId) {
-            const fromIdx = notes.findIndex(n => n.id === draggedId);
-            const toIdx = notes.findIndex(n => n.id === targetId);
-            if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-            const [moved] = notes.splice(fromIdx, 1);
-            notes.splice(toIdx, 0, moved);
-            saveNotes();
-            renderNotes();
-        }
-
-        function updateCombined() {
-            const sepValue = separatorSelect.value
-                .replace(/\\n/g, '\n');
-            const combined = notes.map(n => n.text).join(sepValue);
-            combinedText.value = combined;
-            combinedCharCnt.textContent = combined.length;
-        }
-
-        // ── Storage ───────────────────────────────────────
-        function saveNotes() {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); } catch (e) { }
-        }
-        function loadNotes() {
-            try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                return raw ? JSON.parse(raw) : [];
-            } catch (e) { return []; }
-        }
-
-        // ── Helpers ───────────────────────────────────────
-        function escapeHtml(str) {
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
-        }
-
-        // ── LaTeX Rendering ───────────────────────────────
-        const KATEX_OPTIONS = {
-            delimiters: [
-                { left: '$$', right: '$$', display: true },
-                { left: '$', right: '$', display: false },
-                { left: '\\(', right: '\\)', display: false },
-                { left: '\\[', right: '\\]', display: true },
-                // LaTeX environments
-                { left: '\\begin{equation}', right: '\\end{equation}', display: true },
-                { left: '\\begin{equation*}', right: '\\end{equation*}', display: true },
-                { left: '\\begin{align}', right: '\\end{align}', display: true },
-                { left: '\\begin{align*}', right: '\\end{align*}', display: true },
-                { left: '\\begin{gather}', right: '\\end{gather}', display: true },
-                { left: '\\begin{gather*}', right: '\\end{gather*}', display: true },
-                { left: '\\begin{pmatrix}', right: '\\end{pmatrix}', display: true },
-                { left: '\\begin{bmatrix}', right: '\\end{bmatrix}', display: true },
-                { left: '\\begin{cases}', right: '\\end{cases}', display: true },
-                { left: '\\begin{aligned}', right: '\\end{aligned}', display: true },
-            ],
-            // Custom macros commonly used in academic papers
-            macros: {
-                '\\mb': '\\mathbf',
-                '\\bs': '\\boldsymbol',
-                '\\bm': '\\boldsymbol',
-                '\\mc': '\\mathcal',
-                '\\mr': '\\mathrm',
-                '\\mbb': '\\mathbb',
-                '\\R': '\\mathbb{R}',
-                '\\N': '\\mathbb{N}',
-                '\\Z': '\\mathbb{Z}',
-                '\\T': '\\mathsf{T}',
-            },
-            throwOnError: false,
-            trust: true,
-            // Ignore unknown commands like \cite instead of erroring
-            strict: false
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+        const STORAGE = {
+            source: 'latex_image_studio_source',
+            prefs: 'latex_image_studio_prefs',
+            recent: 'latex_image_studio_recent'
         };
 
-        function renderLatexInNotes() {
-            if (typeof renderMathInElement !== 'function') return;
-            document.querySelectorAll('.note-text').forEach(el => {
-                renderMathInElement(el, KATEX_OPTIONS);
+        const DEFAULT_SOURCE = '\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}';
+
+        const SNIPPETS = [
+            { label: 'Fraction', value: '\\frac{a}{b}', sample: '\\frac{a}{b}' },
+            { label: 'Square Root', value: '\\sqrt{x^2 + 1}', sample: '\\sqrt{x}' },
+            { label: 'Integral', value: '\\int_a^b f(x)\\,dx', sample: '\\int_a^b' },
+            { label: 'Sum', value: '\\sum_{n=1}^{\\infty} a_n', sample: '\\sum_{n=1}' },
+            { label: 'Limit', value: '\\lim_{x \\to 0} \\frac{\\sin x}{x}', sample: '\\lim_{x\\to0}' },
+            { label: 'Vector', value: '\\vec{v}=\\begin{bmatrix}x\\\\y\\\\z\\end{bmatrix}', sample: 'bmatrix' },
+            { label: 'Cases', value: 'f(x)=\\begin{cases} x^2, & x \\ge 0 \\\\ -x, & x < 0 \\end{cases}', sample: 'cases' },
+            { label: 'Aligned', value: '\\begin{aligned} a&=b+c \\\\ d&=e+f \\end{aligned}', sample: 'aligned' }
+        ];
+
+        const EXAMPLES = [
+            {
+                label: 'Gaussian Integral',
+                value: '\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}'
+            },
+            {
+                label: 'Quadratic Formula',
+                value: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}'
+            },
+            {
+                label: 'Bayes Rule',
+                value: 'P(A\\mid B)=\\frac{P(B\\mid A)P(A)}{P(B)}'
+            },
+            {
+                label: 'Euler Identity',
+                value: 'e^{i\\pi}+1=0'
+            },
+            {
+                label: 'Fourier Transform',
+                value: '\\hat{f}(\\xi)=\\int_{-\\infty}^{\\infty} f(x)e^{-2\\pi i x\\xi}\\,dx'
+            },
+            {
+                label: 'Matrix Product',
+                value: '\\begin{bmatrix}a&b\\\\c&d\\end{bmatrix}\\begin{bmatrix}x\\\\y\\end{bmatrix}=\\begin{bmatrix}ax+by\\\\cx+dy\\end{bmatrix}'
+            },
+            {
+                label: 'Cases Function',
+                value: 'f(x)=\\begin{cases}x^2,&x\\ge0\\\\-x,&x<0\\end{cases}'
+            },
+            {
+                label: 'Aligned Steps',
+                value: '\\begin{aligned}\\nabla\\cdot\\mathbf{E}&=\\frac{\\rho}{\\varepsilon_0}\\\\\\nabla\\times\\mathbf{E}&=-\\frac{\\partial\\mathbf{B}}{\\partial t}\\end{aligned}'
+            }
+        ];
+
+        const refs = {
+            source: document.getElementById('latexSource'),
+            charCount: document.getElementById('charCount'),
+            previewStage: document.getElementById('previewStage'),
+            renderStatus: document.getElementById('renderStatus'),
+            imageSize: document.getElementById('imageSize'),
+            sourceMode: document.getElementById('sourceMode'),
+            backgroundLabel: document.getElementById('backgroundLabel'),
+            formulaColor: document.getElementById('formulaColor'),
+            formulaColorText: document.getElementById('formulaColorText'),
+            backgroundMode: document.getElementById('backgroundMode'),
+            backgroundColorControl: document.getElementById('backgroundColorControl'),
+            backgroundColor: document.getElementById('backgroundColor'),
+            backgroundColorText: document.getElementById('backgroundColorText'),
+            displayMode: document.getElementById('displayMode'),
+            formulaSize: document.getElementById('formulaSize'),
+            exportPadding: document.getElementById('exportPadding'),
+            pngScale: document.getElementById('pngScale'),
+            copyPngBtn: document.getElementById('copyPngBtn'),
+            downloadPngBtn: document.getElementById('downloadPngBtn'),
+            downloadSvgBtn: document.getElementById('downloadSvgBtn'),
+            copySvgCodeBtn: document.getElementById('copySvgCodeBtn'),
+            copySourceBtn: document.getElementById('copySourceBtn'),
+            clearSourceBtn: document.getElementById('clearSourceBtn'),
+            snippetGrid: document.getElementById('snippetGrid'),
+            exampleSelect: document.getElementById('exampleSelect'),
+            loadExampleBtn: document.getElementById('loadExampleBtn'),
+            recentList: document.getElementById('recentList'),
+            clearRecentBtn: document.getElementById('clearRecentBtn'),
+            toastContainer: document.getElementById('toastContainer')
+        };
+
+        let renderTimer;
+        let renderVersion = 0;
+        let recent = loadJson(STORAGE.recent, []);
+
+        init();
+
+        function init() {
+            const prefs = loadJson(STORAGE.prefs, {});
+            refs.source.value = localStorage.getItem(STORAGE.source) || DEFAULT_SOURCE;
+            refs.formulaColor.value = normalizeHexColor(prefs.color) || '#111827';
+            refs.formulaColorText.value = refs.formulaColor.value.toUpperCase();
+            refs.backgroundMode.value = prefs.backgroundMode || 'transparent';
+            refs.backgroundColor.value = normalizeHexColor(prefs.backgroundColor) || '#ffffff';
+            refs.backgroundColorText.value = refs.backgroundColor.value.toUpperCase();
+            refs.displayMode.value = prefs.displayMode || 'auto';
+            refs.formulaSize.value = prefs.formulaSize || '100';
+            refs.exportPadding.value = prefs.exportPadding || '24';
+            refs.pngScale.value = prefs.pngScale || '2';
+
+            renderSnippets();
+            renderExamples();
+            renderRecent();
+            bindEvents();
+            updateCounts();
+            updateBackgroundControls();
+            scheduleRender();
+            refs.source.focus();
+        }
+
+        function bindEvents() {
+            refs.source.addEventListener('input', () => {
+                updateCounts();
+                localStorage.setItem(STORAGE.source, refs.source.value);
+                scheduleRender();
+            });
+
+            refs.formulaColor.addEventListener('input', () => {
+                refs.formulaColorText.value = refs.formulaColor.value.toUpperCase();
+                savePrefs();
+                scheduleRender();
+            });
+
+            refs.formulaColorText.addEventListener('input', () => {
+                const color = normalizeHexColor(refs.formulaColorText.value);
+                if (!color) return;
+                refs.formulaColor.value = color;
+                refs.formulaColorText.value = color.toUpperCase();
+                savePrefs();
+                scheduleRender();
+            });
+
+            refs.backgroundMode.addEventListener('change', () => {
+                updateBackgroundControls();
+                savePrefs();
+                scheduleRender();
+            });
+
+            refs.backgroundColor.addEventListener('input', () => {
+                refs.backgroundColorText.value = refs.backgroundColor.value.toUpperCase();
+                savePrefs();
+                scheduleRender();
+            });
+
+            refs.backgroundColorText.addEventListener('input', () => {
+                const color = normalizeHexColor(refs.backgroundColorText.value);
+                if (!color) return;
+                refs.backgroundColor.value = color;
+                refs.backgroundColorText.value = color.toUpperCase();
+                savePrefs();
+                scheduleRender();
+            });
+
+            [refs.displayMode, refs.formulaSize, refs.exportPadding, refs.pngScale].forEach(control => {
+                control.addEventListener('change', () => {
+                    savePrefs();
+                    scheduleRender();
+                });
+            });
+
+            refs.copyPngBtn.addEventListener('click', copyPngToClipboard);
+            refs.downloadPngBtn.addEventListener('click', downloadPng);
+            refs.downloadSvgBtn.addEventListener('click', downloadSvg);
+            refs.copySvgCodeBtn.addEventListener('click', copySvgCode);
+            refs.copySourceBtn.addEventListener('click', copySource);
+            refs.clearSourceBtn.addEventListener('click', clearSource);
+            refs.loadExampleBtn.addEventListener('click', loadSelectedExample);
+            refs.clearRecentBtn.addEventListener('click', clearRecent);
+
+            document.addEventListener('keydown', event => {
+                if (!isCopyShortcut(event) || editableSelectionExists() || window.getSelection().toString()) return;
+                event.preventDefault();
+                copyPngToClipboard();
+            });
+
+            window.addEventListener('load', scheduleRender);
+            window.addEventListener('resize', updateExportSize);
+        }
+
+        function renderSnippets() {
+            refs.snippetGrid.innerHTML = '';
+            SNIPPETS.forEach(snippet => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'snippet-btn';
+                button.textContent = snippet.label;
+
+                const sample = document.createElement('span');
+                sample.textContent = snippet.sample;
+                button.appendChild(sample);
+
+                button.addEventListener('click', () => insertSnippet(snippet.value));
+                refs.snippetGrid.appendChild(button);
             });
         }
 
-        function hasLatex(str) {
-            return /\$\$.+?\$\$|\$.+?\$|\\\(.+?\\\)|\\\[.+?\\\]|\\begin\{/s.test(str);
+        function renderExamples() {
+            refs.exampleSelect.innerHTML = '';
+            EXAMPLES.forEach((example, index) => {
+                const option = document.createElement('option');
+                option.value = String(index);
+                option.textContent = example.label;
+                refs.exampleSelect.appendChild(option);
+            });
         }
 
-        function updateLatexPreview() {
-            const text = inputArea.value;
-            if (hasLatex(text) && typeof renderMathInElement === 'function') {
-                latexPreview.textContent = text;
-                latexPreview.classList.add('visible');
-                previewLabel.classList.add('visible');
-                renderMathInElement(latexPreview, KATEX_OPTIONS);
-            } else {
-                latexPreview.classList.remove('visible');
-                previewLabel.classList.remove('visible');
+        function renderRecent() {
+            refs.recentList.innerHTML = '';
+
+            if (!recent.length) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-recent';
+                empty.textContent = 'No recent formulas yet.';
+                refs.recentList.appendChild(empty);
+                return;
+            }
+
+            recent.forEach(source => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'recent-btn';
+                button.textContent = source;
+                button.title = source;
+                button.addEventListener('click', () => setSource(source));
+                refs.recentList.appendChild(button);
+            });
+        }
+
+        function insertSnippet(snippet) {
+            const start = refs.source.selectionStart;
+            const end = refs.source.selectionEnd;
+            const prefix = start > 0 && refs.source.value[start - 1] && !/\s/.test(refs.source.value[start - 1]) ? ' ' : '';
+            const suffix = refs.source.value[end] && !/\s/.test(refs.source.value[end]) ? ' ' : '';
+            refs.source.setRangeText(`${prefix}${snippet}${suffix}`, start, end, 'end');
+            refs.source.focus();
+            updateCounts();
+            localStorage.setItem(STORAGE.source, refs.source.value);
+            scheduleRender();
+        }
+
+        function loadSelectedExample() {
+            const example = EXAMPLES[Number(refs.exampleSelect.value)];
+            if (!example) return;
+            setSource(example.value);
+            toast(`Loaded ${example.label}`);
+        }
+
+        function setSource(value) {
+            refs.source.value = value;
+            refs.source.focus();
+            refs.source.setSelectionRange(refs.source.value.length, refs.source.value.length);
+            updateCounts();
+            localStorage.setItem(STORAGE.source, refs.source.value);
+            scheduleRender();
+        }
+
+        function clearSource() {
+            setSource('');
+            toast('Source cleared');
+        }
+
+        function copySource() {
+            const text = refs.source.value;
+            if (!text.trim()) {
+                toast('No source to copy');
+                return;
+            }
+
+            navigator.clipboard.writeText(text)
+                .then(() => toast('Source copied'))
+                .catch(() => toast('Clipboard text copy was blocked'));
+        }
+
+        async function copySvgCode() {
+            try {
+                const exportSvg = buildExportSvg();
+                await navigator.clipboard.writeText(exportSvg.markup);
+                rememberCurrentFormula();
+                toast('SVG code copied');
+            } catch (error) {
+                toast(error.message || 'SVG copy failed');
             }
         }
 
-        function toast(msg) {
+        async function copyPngToClipboard() {
+            try {
+                if (!navigator.clipboard || !window.ClipboardItem) {
+                    throw new Error('Image clipboard is not available in this browser.');
+                }
+
+                setStatus('Copying PNG...');
+                const pngBlob = await buildPngBlob();
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': pngBlob })
+                ]);
+                rememberCurrentFormula();
+                setStatus('PNG copied to clipboard', 'good');
+                toast('PNG image copied');
+            } catch (error) {
+                setStatus('Clipboard copy blocked', 'error');
+                toast(error.message || 'PNG clipboard copy failed');
+            }
+        }
+
+        async function downloadPng() {
+            try {
+                setStatus('Preparing PNG...');
+                const pngBlob = await buildPngBlob();
+                downloadBlob(pngBlob, makeFileName('png'));
+                rememberCurrentFormula();
+                setStatus('PNG exported', 'good');
+                toast('PNG exported');
+            } catch (error) {
+                setStatus('PNG export failed', 'error');
+                toast(error.message || 'PNG export failed');
+            }
+        }
+
+        function downloadSvg() {
+            try {
+                const exportSvg = buildExportSvg();
+                downloadBlob(new Blob([exportSvg.markup], { type: 'image/svg+xml;charset=utf-8' }), makeFileName('svg'));
+                rememberCurrentFormula();
+                setStatus('SVG exported', 'good');
+                toast('SVG exported');
+            } catch (error) {
+                setStatus('SVG export failed', 'error');
+                toast(error.message || 'SVG export failed');
+            }
+        }
+
+        async function renderLatex() {
+            const version = ++renderVersion;
+            const raw = refs.source.value.trim();
+
+            if (!raw) {
+                refs.previewStage.innerHTML = '<div class="placeholder">Type LaTeX on the left.</div>';
+                refs.imageSize.textContent = '0 x 0 px';
+                setStatus('Ready');
+                return;
+            }
+
+            setStatus('Rendering...');
+
+            try {
+                await waitForMathJax();
+                if (version !== renderVersion) return;
+
+                const normalized = normalizeLatexInput(raw);
+                refs.sourceMode.textContent = normalized.display ? 'Display math' : 'Inline math';
+
+                const output = MathJax.tex2svg(normalized.tex, { display: normalized.display });
+                const svg = output.querySelector('svg');
+                if (!svg) throw new Error('No SVG output was created.');
+                if (version !== renderVersion) return;
+
+                const previewSvg = svg.cloneNode(true);
+                applySvgColor(previewSvg, getColor());
+                previewSvg.setAttribute('role', 'img');
+                previewSvg.setAttribute('aria-label', 'Rendered LaTeX');
+
+                refs.previewStage.style.fontSize = `${Number(refs.formulaSize.value) || 100}%`;
+                refs.previewStage.innerHTML = '';
+                refs.previewStage.appendChild(previewSvg);
+                updatePreviewBackground();
+
+                await nextFrame();
+                if (version !== renderVersion) return;
+                updateExportSize();
+                setStatus('Ready', 'good');
+            } catch (error) {
+                if (version !== renderVersion) return;
+                refs.previewStage.innerHTML = `<div class="render-error">${escapeHtml(error.message || 'Could not render this formula.')}</div>`;
+                refs.imageSize.textContent = '0 x 0 px';
+                setStatus('Formula error', 'error');
+            }
+        }
+
+        function scheduleRender() {
+            clearTimeout(renderTimer);
+            renderTimer = setTimeout(renderLatex, 120);
+        }
+
+        function updateCounts() {
+            refs.charCount.textContent = refs.source.value.length;
+        }
+
+        function updateExportSize() {
+            const svg = refs.previewStage.querySelector('svg');
+            if (!svg) {
+                refs.imageSize.textContent = '0 x 0 px';
+                return;
+            }
+
+            const rect = svg.getBoundingClientRect();
+            const padding = getPadding();
+            const width = Math.ceil(rect.width + padding * 2);
+            const height = Math.ceil(rect.height + padding * 2);
+            refs.imageSize.textContent = `${width} x ${height} px`;
+        }
+
+        function buildExportSvg() {
+            const renderedSvg = refs.previewStage.querySelector('svg');
+            if (!renderedSvg) throw new Error('Render a formula first.');
+
+            const rect = renderedSvg.getBoundingClientRect();
+            const formulaWidth = Math.max(1, Math.ceil(rect.width));
+            const formulaHeight = Math.max(1, Math.ceil(rect.height));
+            const padding = getPadding();
+            const exportWidth = formulaWidth + padding * 2;
+            const exportHeight = formulaHeight + padding * 2;
+            const color = getColor();
+
+            const outerSvg = document.createElementNS(SVG_NS, 'svg');
+            outerSvg.setAttribute('xmlns', SVG_NS);
+            outerSvg.setAttribute('width', String(exportWidth));
+            outerSvg.setAttribute('height', String(exportHeight));
+            outerSvg.setAttribute('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
+
+            if (hasSolidBackground()) {
+                const background = document.createElementNS(SVG_NS, 'rect');
+                background.setAttribute('x', '0');
+                background.setAttribute('y', '0');
+                background.setAttribute('width', String(exportWidth));
+                background.setAttribute('height', String(exportHeight));
+                background.setAttribute('fill', getBackgroundColor());
+                outerSvg.appendChild(background);
+            }
+
+            const innerSvg = renderedSvg.cloneNode(true);
+            applySvgColor(innerSvg, color);
+            innerSvg.removeAttribute('id');
+            innerSvg.removeAttribute('style');
+            innerSvg.setAttribute('x', String(padding));
+            innerSvg.setAttribute('y', String(padding));
+            innerSvg.setAttribute('width', String(formulaWidth));
+            innerSvg.setAttribute('height', String(formulaHeight));
+            innerSvg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+            innerSvg.style.color = color;
+            innerSvg.style.overflow = 'visible';
+
+            outerSvg.appendChild(innerSvg);
+
+            return {
+                markup: new XMLSerializer().serializeToString(outerSvg),
+                width: exportWidth,
+                height: exportHeight
+            };
+        }
+
+        async function buildPngBlob() {
+            const exportSvg = buildExportSvg();
+            const svgBlob = new Blob([exportSvg.markup], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            const scale = Number(refs.pngScale.value) || 2;
+
+            try {
+                const image = new Image();
+                const loaded = new Promise((resolve, reject) => {
+                    image.onload = resolve;
+                    image.onerror = () => reject(new Error('Could not load SVG for PNG export.'));
+                });
+                image.src = url;
+                await loaded;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.ceil(exportSvg.width * scale));
+                canvas.height = Math.max(1, Math.ceil(exportSvg.height * scale));
+
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                return await new Promise((resolve, reject) => {
+                    canvas.toBlob(blob => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('PNG export failed.'));
+                    }, 'image/png');
+                });
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        function normalizeLatexInput(raw) {
+            let tex = raw.trim();
+            let displayFromSource = /^\\begin\{/.test(tex);
+            let wrappedSource = false;
+            const wrappers = [
+                { left: '$$', right: '$$', display: true },
+                { left: '\\[', right: '\\]', display: true },
+                { left: '\\(', right: '\\)', display: false },
+                { left: '$', right: '$', display: false }
+            ];
+
+            for (const wrapper of wrappers) {
+                if (tex.startsWith(wrapper.left) && tex.endsWith(wrapper.right) && tex.length > wrapper.left.length + wrapper.right.length) {
+                    tex = tex.slice(wrapper.left.length, tex.length - wrapper.right.length).trim();
+                    displayFromSource = wrapper.display;
+                    wrappedSource = true;
+                    break;
+                }
+            }
+
+            const mode = refs.displayMode.value;
+            const display = mode === 'display' || (mode === 'auto' && (displayFromSource || !wrappedSource));
+            return { tex, display };
+        }
+
+        function waitForMathJax() {
+            if (window.MathJax && MathJax.tex2svg) return Promise.resolve();
+
+            return new Promise((resolve, reject) => {
+                const startedAt = Date.now();
+                const timer = setInterval(() => {
+                    if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
+                        clearInterval(timer);
+                        MathJax.startup.promise.then(resolve).catch(reject);
+                    } else if (Date.now() - startedAt > 10000) {
+                        clearInterval(timer);
+                        reject(new Error('MathJax did not finish loading.'));
+                    }
+                }, 50);
+            });
+        }
+
+        function applySvgColor(svg, color) {
+            svg.style.color = color;
+            svg.setAttribute('color', color);
+            svg.setAttribute('fill', color);
+
+            svg.querySelectorAll('path, use, rect, circle, ellipse, polygon').forEach(el => {
+                const fill = el.getAttribute('fill');
+                if (fill !== 'none') el.setAttribute('fill', color);
+            });
+
+            svg.querySelectorAll('[stroke]').forEach(el => {
+                const stroke = el.getAttribute('stroke');
+                if (stroke !== 'none') el.setAttribute('stroke', color);
+            });
+        }
+
+        function getColor() {
+            return normalizeHexColor(refs.formulaColorText.value) || normalizeHexColor(refs.formulaColor.value) || '#111827';
+        }
+
+        function hasSolidBackground() {
+            return refs.backgroundMode.value === 'solid';
+        }
+
+        function getBackgroundColor() {
+            return normalizeHexColor(refs.backgroundColorText.value) || normalizeHexColor(refs.backgroundColor.value) || '#ffffff';
+        }
+
+        function updateBackgroundControls() {
+            const solid = hasSolidBackground();
+            refs.backgroundColor.disabled = !solid;
+            refs.backgroundColorText.disabled = !solid;
+            refs.backgroundColorControl.classList.toggle('disabled', !solid);
+            updatePreviewBackground();
+        }
+
+        function updatePreviewBackground() {
+            if (hasSolidBackground()) {
+                const color = getBackgroundColor();
+                refs.previewStage.style.backgroundColor = color;
+                refs.backgroundLabel.textContent = `Solid background ${color.toUpperCase()}`;
+            } else {
+                refs.previewStage.style.backgroundColor = 'transparent';
+                refs.backgroundLabel.textContent = 'Transparent background';
+            }
+        }
+
+        function getPadding() {
+            return Number(refs.exportPadding.value) || 0;
+        }
+
+        function normalizeHexColor(value) {
+            const raw = (value || '').trim();
+            const sixDigit = raw.match(/^#?([0-9a-fA-F]{6})$/);
+            if (sixDigit) return `#${sixDigit[1].toLowerCase()}`;
+
+            const threeDigit = raw.match(/^#?([0-9a-fA-F]{3})$/);
+            if (!threeDigit) return null;
+
+            const [r, g, b] = threeDigit[1].toLowerCase();
+            return `#${r}${r}${g}${g}${b}${b}`;
+        }
+
+        function savePrefs() {
+            const prefs = {
+                color: getColor(),
+                backgroundMode: refs.backgroundMode.value,
+                backgroundColor: getBackgroundColor(),
+                displayMode: refs.displayMode.value,
+                formulaSize: refs.formulaSize.value,
+                exportPadding: refs.exportPadding.value,
+                pngScale: refs.pngScale.value
+            };
+            localStorage.setItem(STORAGE.prefs, JSON.stringify(prefs));
+        }
+
+        function rememberCurrentFormula() {
+            const value = refs.source.value.trim();
+            if (!value) return;
+
+            recent = [value, ...recent.filter(item => item !== value)].slice(0, 10);
+            localStorage.setItem(STORAGE.recent, JSON.stringify(recent));
+            renderRecent();
+        }
+
+        function clearRecent() {
+            recent = [];
+            localStorage.removeItem(STORAGE.recent);
+            renderRecent();
+            toast('Recent formulas cleared');
+        }
+
+        function isCopyShortcut(event) {
+            return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c';
+        }
+
+        function editableSelectionExists() {
+            const active = document.activeElement;
+            if (!active || !('selectionStart' in active) || !('selectionEnd' in active)) return false;
+            return active.selectionStart !== active.selectionEnd;
+        }
+
+        function downloadBlob(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function makeFileName(extension) {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            return `latex-image-${stamp}.${extension}`;
+        }
+
+        function loadJson(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : fallback;
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value;
+            return div.innerHTML;
+        }
+
+        function nextFrame() {
+            return new Promise(resolve => requestAnimationFrame(resolve));
+        }
+
+        function setStatus(message, tone = '') {
+            refs.renderStatus.textContent = message;
+            refs.renderStatus.classList.toggle('good', tone === 'good');
+            refs.renderStatus.classList.toggle('error', tone === 'error');
+        }
+
+        function toast(message) {
             const el = document.createElement('div');
             el.className = 'toast';
-            el.textContent = msg;
-            document.getElementById('toastContainer').appendChild(el);
-            setTimeout(() => el.remove(), 2500);
+            el.textContent = message;
+            refs.toastContainer.appendChild(el);
+            setTimeout(() => el.remove(), 2800);
         }
     </script>
 </body>
