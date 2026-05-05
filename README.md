@@ -1,1 +1,1 @@
-https://github.com/erdisayar/latexstudio
+https://erdisayar.github.io/latexstudio/
