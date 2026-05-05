@@ -1,1 +1,1 @@
-https://erdisayar.github.io/temporarynote/
+https://github.com/erdisayar/latexstudio
