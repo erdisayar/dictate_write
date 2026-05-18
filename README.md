@@ -1,7 +1,7 @@
-# Text Diff Studio
+# Temporary LaTeX Notes
 
-A small browser tool for comparing two versions of text and highlighting additions, deletions, and unchanged content.
+A small GitHub Pages tool for drafting short LaTeX notes in the browser.
 
-Features include side-by-side, inline, full-diff, and differences-only views; line, word, and character comparison; whitespace/case controls; text-file import; and diff report download.
+It provides a source editor, live KaTeX preview, line-level math error hints, local autosave, light and dark themes, snippet insertion, `.tex` import/export, rendered HTML export, PDF export, and PNG/SVG copy or fallback download. It is useful for quick text and equation checks before opening a full Overleaf project.
 
-https://erdisayar.github.io/textdiff/
+https://erdisayar.github.io/texnote/

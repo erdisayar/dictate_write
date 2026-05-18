@@ -1,1498 +1,206 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Diff Studio</title>
-    <meta name="description" content="Compare two text versions and highlight the differences.">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg: #111418;
-            --panel: #171c22;
-            --panel-strong: #1e252d;
-            --panel-soft: #242d36;
-            --border: #303a46;
-            --border-strong: #475464;
-            --text: #edf2f7;
-            --muted: #a2adba;
-            --subtle: #768391;
-            --accent: #22c55e;
-            --accent-strong: #16a34a;
-            --accent-soft: rgba(34, 197, 94, 0.14);
-            --insert-bg: rgba(34, 197, 94, 0.18);
-            --insert-border: rgba(34, 197, 94, 0.38);
-            --delete-bg: rgba(248, 113, 113, 0.18);
-            --delete-border: rgba(248, 113, 113, 0.4);
-            --change-bg: rgba(245, 158, 11, 0.16);
-            --change-border: rgba(245, 158, 11, 0.34);
-            --success: #86efac;
-            --danger: #f87171;
-            --warning: #fbbf24;
-            --shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
-            --radius: 8px;
-            --transition: 180ms ease;
-        }
-
-        html {
-            min-height: 100%;
-            background: var(--bg);
-        }
-
-        body {
-            min-height: 100vh;
-            margin: 0;
-            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            color: var(--text);
-            background:
-                linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-                var(--bg);
-            background-size: 32px 32px;
-        }
-
-        button,
-        textarea,
-        select,
-        input {
-            font: inherit;
-        }
-
-        button {
-            border: 0;
-        }
-
-        .app {
-            width: min(1260px, calc(100% - 32px));
-            margin: 0 auto;
-            padding: 28px 0 42px;
-        }
-
-        .app-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            margin-bottom: 18px;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 2.05rem;
-            line-height: 1.05;
-            letter-spacing: 0;
-        }
-
-        .status-pill {
-            min-width: 160px;
-            max-width: 420px;
-            padding: 9px 12px;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            background: rgba(23, 28, 34, 0.88);
-            color: var(--muted);
-            font-size: 0.82rem;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .status-pill.good {
-            border-color: rgba(134, 239, 172, 0.35);
-            color: var(--success);
-            background: rgba(34, 197, 94, 0.08);
-        }
-
-        .status-pill.warn {
-            border-color: rgba(251, 191, 36, 0.36);
-            color: var(--warning);
-            background: rgba(245, 158, 11, 0.08);
-        }
-
-        .studio {
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: rgba(23, 28, 34, 0.95);
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-
-        .toolbar {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-            padding: 16px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(30, 37, 45, 0.86);
-        }
-
-        .control {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 7px;
-        }
-
-        label,
-        .panel-title {
-            color: var(--muted);
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0;
-        }
-
-        select,
-        input[type="number"],
-        input[type="text"] {
-            width: 100%;
-            min-height: 40px;
-            padding: 0 11px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            color: var(--text);
-            background: #11171d;
-            outline: none;
-            transition: border-color var(--transition), box-shadow var(--transition);
-        }
-
-        select:focus,
-        input[type="number"]:focus,
-        input[type="text"]:focus,
-        textarea:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-soft);
-        }
-
-        .checkbox-control {
-            min-height: 40px;
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            padding: 0 11px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            color: var(--text);
-            background: #11171d;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .checkbox-control input {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--accent);
-        }
-
-        .hidden-input {
-            display: none;
-        }
-
-        .workspace {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            min-height: 410px;
-        }
-
-        .pane {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .pane + .pane {
-            border-left: 1px solid var(--border);
-        }
-
-        .pane-header,
-        .result-header {
-            min-height: 58px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(18, 24, 31, 0.76);
-        }
-
-        .pane-title {
-            color: var(--text);
-            font-size: 0.94rem;
-            font-weight: 700;
-            letter-spacing: 0;
-        }
-
-        .mini-actions,
-        .button-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 340px;
-            flex: 1;
-            padding: 18px;
-            resize: vertical;
-            border: 0;
-            border-radius: 0;
-            border-bottom: 1px solid var(--border);
-            color: var(--text);
-            background: #11171d;
-            outline: none;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-            font-size: 0.95rem;
-            line-height: 1.65;
-            tab-size: 4;
-        }
-
-        textarea::placeholder {
-            color: var(--subtle);
-        }
-
-        .meta-row {
-            min-height: 39px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 16px;
-            color: var(--subtle);
-            background: rgba(17, 23, 29, 0.78);
-            font-size: 0.78rem;
-        }
-
-        .btn {
-            min-height: 38px;
-            padding: 0 14px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            border-radius: var(--radius);
-            color: var(--text);
-            background: var(--panel-soft);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            font-size: 0.86rem;
-            font-weight: 700;
-            transition: transform var(--transition), border-color var(--transition), background var(--transition);
-        }
-
-        .btn:hover {
-            border-color: var(--border-strong);
-            background: #2a3440;
-        }
-
-        .btn:active {
-            transform: translateY(1px);
-        }
-
-        .btn.primary {
-            color: #052e16;
-            background: var(--accent);
-            border-color: var(--accent);
-        }
-
-        .btn.primary:hover {
-            background: var(--accent-strong);
-            border-color: var(--accent-strong);
-        }
-
-        .btn.small {
-            min-height: 32px;
-            padding: 0 10px;
-            font-size: 0.78rem;
-        }
-
-        .btn.ghost {
-            color: var(--muted);
-            background: transparent;
-        }
-
-        .result-shell {
-            margin-top: 14px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: rgba(23, 28, 34, 0.95);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(120px, 1fr));
-            gap: 10px;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(30, 37, 45, 0.7);
-        }
-
-        .stat {
-            min-width: 0;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: #11171d;
-            padding: 10px 12px;
-        }
-
-        .stat-value {
-            display: block;
-            color: var(--text);
-            font-size: 1.15rem;
-            font-weight: 700;
-        }
-
-        .stat-label {
-            display: block;
-            margin-top: 2px;
-            color: var(--subtle);
-            font-size: 0.76rem;
-        }
-
-        .diff-legend {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(14, 20, 26, 0.86);
-        }
-
-        .legend-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            color: var(--muted);
-            font-size: 0.78rem;
-            font-weight: 700;
-        }
-
-        .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-        }
-
-        .legend-dot.insert {
-            background: var(--insert-bg);
-            border-color: var(--insert-border);
-        }
-
-        .legend-dot.delete {
-            background: var(--delete-bg);
-            border-color: var(--delete-border);
-        }
-
-        .legend-dot.equal {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: var(--border-strong);
-        }
-
-        .result-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            min-height: 360px;
-        }
-
-        .result-pane {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .result-pane + .result-pane {
-            border-left: 1px solid var(--border);
-        }
-
-        .diff-output {
-            min-height: 360px;
-            padding: 18px;
-            overflow: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            color: var(--text);
-            background: #0f151b;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-            font-size: 0.92rem;
-            line-height: 1.7;
-        }
-
-        .diff-output.nowrap {
-            white-space: pre;
-        }
-
-        .inline-result,
-        .diffs-result,
-        .full-diff-result {
-            min-height: 360px;
-            padding: 18px;
-            overflow: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            color: var(--text);
-            background:
-                linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 120px),
-                #0f151b;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-            font-size: 0.92rem;
-            line-height: 1.7;
-        }
-
-        .token {
-            border-radius: 4px;
-            padding: 1px 2px;
-        }
-
-        .token.insert {
-            background: var(--insert-bg);
-            box-shadow: inset 0 -1px 0 var(--insert-border);
-        }
-
-        .token.delete {
-            background: var(--delete-bg);
-            box-shadow: inset 0 -1px 0 var(--delete-border);
-            text-decoration: line-through;
-            text-decoration-thickness: 1px;
-        }
-
-        .line-block {
-            display: grid;
-            grid-template-columns: 28px minmax(0, 1fr);
-            gap: 8px;
-            align-items: start;
-            margin: 0 0 4px;
-            padding: 5px 8px;
-            border-left: 3px solid transparent;
-            border-radius: 4px;
-            white-space: pre-wrap;
-        }
-
-        .line-prefix {
-            color: var(--subtle);
-            user-select: none;
-            text-align: center;
-            font-weight: 700;
-        }
-
-        .line-text {
-            min-width: 0;
-        }
-
-        .line-block.insert {
-            border-color: var(--insert-border);
-            background: var(--insert-bg);
-        }
-
-        .line-block.delete {
-            border-color: var(--delete-border);
-            background: var(--delete-bg);
-        }
-
-        .line-block.equal.context {
-            color: var(--muted);
-            background: rgba(255, 255, 255, 0.025);
-        }
-
-        .line-block.equal.full {
-            color: var(--subtle);
-            background: rgba(255, 255, 255, 0.018);
-        }
-
-        .hunk {
-            margin-bottom: 16px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-            background: rgba(17, 23, 29, 0.78);
-        }
-
-        .hunk-title {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 9px 11px;
-            border-bottom: 1px solid var(--border);
-            color: var(--muted);
-            background: rgba(30, 37, 45, 0.7);
-            font-family: "Inter", system-ui, sans-serif;
-            font-size: 0.78rem;
-            font-weight: 700;
-        }
-
-        .full-diff-list {
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-            background: rgba(17, 23, 29, 0.7);
-        }
-
-        .full-diff-list .line-block {
-            margin: 0;
-            border-radius: 0;
-            border-left-width: 4px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.035);
-        }
-
-        .full-diff-list .line-block:nth-child(even).equal.full {
-            background: rgba(255, 255, 255, 0.028);
-        }
-
-        .empty-state {
-            color: var(--subtle);
-            font-family: "Inter", system-ui, sans-serif;
-            text-align: center;
-            padding: 42px 20px;
-        }
-
-        .toast-container {
-            position: fixed;
-            right: 20px;
-            bottom: 20px;
-            z-index: 20;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .toast {
-            max-width: 360px;
-            padding: 10px 14px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            color: var(--text);
-            background: rgba(17, 23, 29, 0.96);
-            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.32);
-            animation: toastIn 180ms ease, toastOut 220ms ease 2.4s forwards;
-            font-size: 0.86rem;
-        }
-
-        @keyframes toastIn {
-            from {
-                opacity: 0;
-                transform: translateY(8px);
+    <title>Temporary LaTeX Notes</title>
+    <meta name="description" content="A private browser scratchpad for short LaTeX notes and equations.">
+    <script>
+        (function () {
+            try {
+                var prefs = JSON.parse(localStorage.getItem('temporary_latex_note_prefs') || '{}');
+                var fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.dataset.theme = prefs.theme || fallback;
+                document.documentElement.dataset.editorSize = prefs.editorSize || 'medium';
+            } catch (error) {
+                document.documentElement.dataset.theme = 'dark';
+                document.documentElement.dataset.editorSize = 'medium';
             }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes toastOut {
-            to {
-                opacity: 0;
-                transform: translateY(-8px);
-            }
-        }
-
-        @media (max-width: 920px) {
-            .workspace,
-            .result-grid,
-            .stats {
-                grid-template-columns: 1fr;
-            }
-
-            .pane + .pane,
-            .result-pane + .result-pane {
-                border-left: 0;
-                border-top: 1px solid var(--border);
-            }
-        }
-
-        @media (max-width: 600px) {
-            .app {
-                width: min(100% - 20px, 1260px);
-                padding-top: 18px;
-            }
-
-            h1 {
-                font-size: 1.55rem;
-            }
-
-            .app-header,
-            .pane-header,
-            .result-header,
-            .meta-row {
-                align-items: stretch;
-                flex-direction: column;
-            }
-
-            .status-pill,
-            .mini-actions,
-            .button-row,
-            .btn {
-                width: 100%;
-            }
-        }
-    </style>
+        }());
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css"
+        integrity="sha384-nH0MfJ44wi1dd7w6jinlyBgljjS8EJAh2JBoRad8a3VDw2K69vfaaqm4WnR+gXtA" crossorigin="anonymous">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.js"
+        integrity="sha384-CwjPRVHTvLiMBFjEoij+QZViMV5rhTOIp7CJzl24JEqpRDA1sJFHVXXLURktbYYp"
+        crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/contrib/auto-render.min.js"
+        integrity="sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz"
+        crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script defer src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="app.js"></script>
 </head>
 
 <body>
     <div class="app">
-        <header class="app-header">
-            <h1>Text Diff Studio</h1>
-            <div class="status-pill" id="statusPill" aria-live="polite">Ready</div>
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">TeX</div>
+                <div>
+                    <h1>Temporary LaTeX Notes</h1>
+                </div>
+            </div>
+
+            <div class="top-actions">
+                <div class="segmented" role="group" aria-label="Theme">
+                    <button class="segment-btn" type="button" data-theme-choice="light">
+                        <i data-lucide="sun"></i>
+                        <span>Light</span>
+                    </button>
+                    <button class="segment-btn" type="button" data-theme-choice="dark">
+                        <i data-lucide="moon"></i>
+                        <span>Dark</span>
+                    </button>
+                </div>
+
+                <div class="status-pill" id="statusPill" aria-live="polite">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span id="statusText">Ready</span>
+                </div>
+            </div>
         </header>
 
         <main>
-            <section class="studio" aria-label="Text difference tool">
-                <div class="toolbar">
-                    <div class="control">
-                        <label for="compareMode">Compare By</label>
-                        <select id="compareMode">
-                            <option value="line" selected>Lines</option>
-                            <option value="word">Words</option>
-                            <option value="char">Characters</option>
-                        </select>
-                    </div>
+            <section class="toolbar" aria-label="Note controls">
+                <label class="title-field" for="noteTitle">
+                    <span>Note Title</span>
+                    <input id="noteTitle" type="text" autocomplete="off">
+                </label>
 
-                    <div class="control">
-                        <label for="viewMode">View</label>
-                        <select id="viewMode">
-                            <option value="side" selected>Side by Side</option>
-                            <option value="inline">Inline</option>
-                            <option value="full">Full Diff</option>
-                            <option value="diffs">Only Differences</option>
-                        </select>
-                    </div>
-
-                    <div class="control">
-                        <label for="whitespaceMode">Whitespace</label>
-                        <select id="whitespaceMode">
-                            <option value="exact" selected>Exact</option>
-                            <option value="trim">Trim Line Edges</option>
-                            <option value="collapse">Collapse Spaces</option>
-                        </select>
-                    </div>
-
-                    <div class="control">
-                        <label for="caseMode">Case</label>
-                        <select id="caseMode">
-                            <option value="sensitive" selected>Case Sensitive</option>
-                            <option value="ignore">Ignore Case</option>
-                        </select>
-                    </div>
-
-                    <div class="control">
-                        <label for="contextLines">Context</label>
-                        <input type="number" id="contextLines" min="0" max="20" value="2">
-                    </div>
-
-                    <div class="control">
-                        <label for="wrapMode">Wrapping</label>
-                        <select id="wrapMode">
-                            <option value="wrap" selected>Wrap Text</option>
-                            <option value="nowrap">No Wrap</option>
-                        </select>
-                    </div>
-
-                    <div class="control">
-                        <label for="ignoreBlankLines">Blank Lines</label>
-                        <label class="checkbox-control">
-                            <input type="checkbox" id="ignoreBlankLines">
-                            Ignore blank lines
-                        </label>
-                    </div>
+                <div class="toolbar-actions" aria-label="Main actions">
+                    <button class="btn primary" id="renderBtn" type="button">
+                        <i data-lucide="refresh-cw"></i>
+                        <span>Render</span>
+                    </button>
+                    <button class="btn" id="loadSampleBtn" type="button">
+                        <i data-lucide="sparkles"></i>
+                        <span>Sample</span>
+                    </button>
+                    <button class="btn" id="openFileBtn" type="button">
+                        <i data-lucide="folder-open"></i>
+                        <span>Open</span>
+                    </button>
+                    <button class="btn" id="downloadTexBtn" type="button">
+                        <i data-lucide="download"></i>
+                        <span>.tex</span>
+                    </button>
+                    <button class="btn" id="downloadHtmlBtn" type="button">
+                        <i data-lucide="file-down"></i>
+                        <span>HTML</span>
+                    </button>
+                    <button class="btn" id="downloadPdfBtn" type="button">
+                        <i data-lucide="file-text"></i>
+                        <span>PDF</span>
+                    </button>
+                    <button class="btn" id="copyPngBtn" type="button" title="Copy the rendered note as PNG">
+                        <i data-lucide="image"></i>
+                        <span>Copy PNG</span>
+                    </button>
+                    <button class="btn" id="copySvgBtn" type="button" title="Copy the rendered note as SVG">
+                        <i data-lucide="panel-top"></i>
+                        <span>Copy SVG</span>
+                    </button>
+                    <button class="btn danger" id="clearBtn" type="button">
+                        <i data-lucide="trash-2"></i>
+                        <span>Clear</span>
+                    </button>
                 </div>
 
-                <div class="workspace">
-                    <section class="pane" aria-label="Original text">
-                        <div class="pane-header">
-                            <div class="pane-title">Original</div>
-                            <div class="mini-actions">
-                                <button class="btn small ghost" id="openOriginalBtn" type="button">Open File</button>
-                                <button class="btn small ghost" id="copyOriginalBtn" type="button">Copy</button>
-                                <button class="btn small ghost" id="clearOriginalBtn" type="button">Clear</button>
-                            </div>
-                        </div>
-                        <textarea id="originalText" spellcheck="false"
-                            placeholder="Paste the original text here."></textarea>
-                        <div class="meta-row">
-                            <span><span id="originalCount">0</span> characters</span>
-                            <span><span id="originalLines">0</span> lines</span>
-                        </div>
-                    </section>
-
-                    <section class="pane" aria-label="Changed text">
-                        <div class="pane-header">
-                            <div class="pane-title">Changed</div>
-                            <div class="mini-actions">
-                                <button class="btn small ghost" id="openChangedBtn" type="button">Open File</button>
-                                <button class="btn small ghost" id="copyChangedBtn" type="button">Copy</button>
-                                <button class="btn small ghost" id="clearChangedBtn" type="button">Clear</button>
-                            </div>
-                        </div>
-                        <textarea id="changedText" spellcheck="false"
-                            placeholder="Paste the changed text here."></textarea>
-                        <div class="meta-row">
-                            <span><span id="changedCount">0</span> characters</span>
-                            <span><span id="changedLines">0</span> lines</span>
-                        </div>
-                    </section>
+                <div class="snippet-row" aria-label="Insert snippets">
+                    <button class="chip-btn" type="button" data-snippet="inlineMath">
+                        <i data-lucide="sigma"></i>
+                        <span>Inline</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="displayMath">
+                        <i data-lucide="braces"></i>
+                        <span>Display</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="align">
+                        <i data-lucide="align-left"></i>
+                        <span>Align</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="itemize">
+                        <i data-lucide="list"></i>
+                        <span>List</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="section">
+                        <i data-lucide="heading-2"></i>
+                        <span>Section</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="bold">
+                        <i data-lucide="bold"></i>
+                        <span>Bold</span>
+                    </button>
                 </div>
-
-                <div class="pane-header">
-                    <div class="button-row">
-                        <button class="btn primary" id="compareBtn" type="button">Compare</button>
-                        <button class="btn" id="swapBtn" type="button">Swap</button>
-                        <button class="btn" id="sampleBtn" type="button">Load Sample</button>
-                        <button class="btn" id="clearAllBtn" type="button">Clear All</button>
-                    </div>
-                    <div class="button-row">
-                        <button class="btn" id="copyResultBtn" type="button">Copy Diff</button>
-                        <button class="btn" id="copyChangedOnlyBtn" type="button">Copy Changed Text</button>
-                        <button class="btn" id="downloadDiffBtn" type="button">Download Diff</button>
-                    </div>
-                </div>
-                <input class="hidden-input" type="file" id="originalFileInput" accept=".txt,.tex,.md,.csv,.json,.html,.css,.js,.py,.r,.m,.log,text/*">
-                <input class="hidden-input" type="file" id="changedFileInput" accept=".txt,.tex,.md,.csv,.json,.html,.css,.js,.py,.r,.m,.log,text/*">
             </section>
 
-            <section class="result-shell" aria-label="Difference results">
-                <div class="stats">
-                    <div class="stat">
-                        <span class="stat-value" id="addedStat">0</span>
-                        <span class="stat-label">Added</span>
+            <section class="workspace" aria-label="LaTeX note workspace">
+                <section class="pane editor-pane" aria-label="Source editor">
+                    <div class="pane-header">
+                        <div>
+                            <div class="pane-title">Source</div>
+                            <div class="pane-meta">
+                                <span><span id="characterCount">0</span> chars</span>
+                                <span><span id="wordCount">0</span> words</span>
+                                <span><span id="lineCount">0</span> lines</span>
+                            </div>
+                        </div>
+                        <div class="pane-actions">
+                            <button class="btn small" id="copySourceBtn" type="button">
+                                <i data-lucide="copy"></i>
+                                <span>Copy</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="stat">
-                        <span class="stat-value" id="removedStat">0</span>
-                        <span class="stat-label">Removed</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-value" id="unchangedStat">0</span>
-                        <span class="stat-label">Unchanged</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-value" id="similarityStat">100%</span>
-                        <span class="stat-label">Similarity</span>
-                    </div>
-                </div>
 
-                <div class="result-header">
-                    <div class="pane-title">Differences</div>
-                    <div class="panel-title" id="resultModeLabel">Side by Side</div>
-                </div>
+                    <textarea id="sourceInput" spellcheck="false"
+                        placeholder="Write text with $inline math$, display equations, or small LaTeX blocks."></textarea>
 
-                <div class="diff-legend">
-                    <span class="legend-item"><span class="legend-dot insert"></span> Added</span>
-                    <span class="legend-item"><span class="legend-dot delete"></span> Removed</span>
-                    <span class="legend-item"><span class="legend-dot equal"></span> Unchanged context</span>
-                </div>
+                    <div class="pane-footer">
+                        <label class="toggle-control">
+                            <input id="livePreviewToggle" type="checkbox">
+                            <span>Live Preview</span>
+                        </label>
+                        <label class="select-control" for="editorSize">
+                            <span>Text Size</span>
+                            <select id="editorSize">
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                            </select>
+                        </label>
+                    </div>
+                </section>
 
-                <div id="resultArea"></div>
+                <section class="pane preview-pane" aria-label="Rendered preview">
+                    <div class="pane-header">
+                        <div>
+                            <div class="pane-title">Preview</div>
+                            <div class="pane-meta">
+                                <span><span id="mathCount">0</span> math</span>
+                                <span id="savedStamp">Saved locally</span>
+                            </div>
+                        </div>
+                        <div class="pane-actions">
+                            <button class="btn small" id="copyPreviewBtn" type="button">
+                                <i data-lucide="clipboard-copy"></i>
+                                <span>Copy Text</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <article class="preview-content" id="previewOutput"></article>
+                    <div class="diagnostics" id="diagnostics" hidden></div>
+                </section>
             </section>
         </main>
     </div>
 
+    <input class="hidden-input" id="fileInput" type="file" accept=".tex,.txt,.md,text/*">
     <div class="toast-container" id="toastContainer"></div>
-
-    <script>
-        const STORAGE = {
-            original: 'text_diff_studio_original',
-            changed: 'text_diff_studio_changed',
-            prefs: 'text_diff_studio_prefs'
-        };
-
-        const SAMPLE_ORIGINAL = String.raw`\section{Method}
-We minimize the following objective:
-\[
-L(\theta)=\sum_{i=1}^{n}(y_i-f_\theta(x_i))^2+\lambda\|\theta\|_2^2.
-\]
-The experiment uses a learning rate of 0.01 and 100 epochs.
-The final model is evaluated on the validation set.`;
-
-        const SAMPLE_CHANGED = String.raw`\section{Method}
-We minimize the regularized objective:
-\[
-\mathcal{L}(\theta)=\frac{1}{n}\sum_{i=1}^{n}(y_i-f_\theta(x_i))^2+\lambda\|\theta\|_2^2.
-\]
-The experiment uses a learning rate of 0.005 and 150 epochs.
-The final model is evaluated on the test set.`;
-
-        const refs = {
-            statusPill: document.getElementById('statusPill'),
-            compareMode: document.getElementById('compareMode'),
-            viewMode: document.getElementById('viewMode'),
-            whitespaceMode: document.getElementById('whitespaceMode'),
-            caseMode: document.getElementById('caseMode'),
-            contextLines: document.getElementById('contextLines'),
-            wrapMode: document.getElementById('wrapMode'),
-            ignoreBlankLines: document.getElementById('ignoreBlankLines'),
-            originalText: document.getElementById('originalText'),
-            changedText: document.getElementById('changedText'),
-            originalCount: document.getElementById('originalCount'),
-            changedCount: document.getElementById('changedCount'),
-            originalLines: document.getElementById('originalLines'),
-            changedLines: document.getElementById('changedLines'),
-            compareBtn: document.getElementById('compareBtn'),
-            swapBtn: document.getElementById('swapBtn'),
-            sampleBtn: document.getElementById('sampleBtn'),
-            clearAllBtn: document.getElementById('clearAllBtn'),
-            copyOriginalBtn: document.getElementById('copyOriginalBtn'),
-            copyChangedBtn: document.getElementById('copyChangedBtn'),
-            clearOriginalBtn: document.getElementById('clearOriginalBtn'),
-            clearChangedBtn: document.getElementById('clearChangedBtn'),
-            openOriginalBtn: document.getElementById('openOriginalBtn'),
-            openChangedBtn: document.getElementById('openChangedBtn'),
-            originalFileInput: document.getElementById('originalFileInput'),
-            changedFileInput: document.getElementById('changedFileInput'),
-            copyResultBtn: document.getElementById('copyResultBtn'),
-            copyChangedOnlyBtn: document.getElementById('copyChangedOnlyBtn'),
-            downloadDiffBtn: document.getElementById('downloadDiffBtn'),
-            addedStat: document.getElementById('addedStat'),
-            removedStat: document.getElementById('removedStat'),
-            unchangedStat: document.getElementById('unchangedStat'),
-            similarityStat: document.getElementById('similarityStat'),
-            resultModeLabel: document.getElementById('resultModeLabel'),
-            resultArea: document.getElementById('resultArea'),
-            toastContainer: document.getElementById('toastContainer')
-        };
-
-        let compareTimer;
-        let latestDiff = [];
-        let latestPlainDiff = '';
-
-        init();
-
-        function init() {
-            const prefs = loadJson(STORAGE.prefs, {});
-            refs.originalText.value = localStorage.getItem(STORAGE.original) || '';
-            refs.changedText.value = localStorage.getItem(STORAGE.changed) || '';
-            refs.compareMode.value = prefs.compareMode || 'line';
-            refs.viewMode.value = prefs.viewMode || 'side';
-            refs.whitespaceMode.value = prefs.whitespaceMode || 'exact';
-            refs.caseMode.value = prefs.caseMode || 'sensitive';
-            refs.contextLines.value = prefs.contextLines ?? '2';
-            refs.wrapMode.value = prefs.wrapMode || 'wrap';
-            refs.ignoreBlankLines.checked = Boolean(prefs.ignoreBlankLines);
-
-            bindEvents();
-            updateCounts();
-            compareNow();
-            refs.originalText.focus();
-        }
-
-        function bindEvents() {
-            refs.originalText.addEventListener('input', () => {
-                localStorage.setItem(STORAGE.original, refs.originalText.value);
-                updateCounts();
-                scheduleCompare();
-            });
-
-            refs.changedText.addEventListener('input', () => {
-                localStorage.setItem(STORAGE.changed, refs.changedText.value);
-                updateCounts();
-                scheduleCompare();
-            });
-
-            [refs.compareMode, refs.viewMode, refs.whitespaceMode, refs.caseMode, refs.contextLines, refs.wrapMode, refs.ignoreBlankLines].forEach(control => {
-                control.addEventListener('change', () => {
-                    savePrefs();
-                    compareNow();
-                });
-            });
-
-            refs.compareBtn.addEventListener('click', compareNow);
-            refs.swapBtn.addEventListener('click', swapTexts);
-            refs.sampleBtn.addEventListener('click', loadSample);
-            refs.clearAllBtn.addEventListener('click', clearAll);
-            refs.copyOriginalBtn.addEventListener('click', () => copyText(refs.originalText.value, 'Original copied'));
-            refs.copyChangedBtn.addEventListener('click', () => copyText(refs.changedText.value, 'Changed text copied'));
-            refs.clearOriginalBtn.addEventListener('click', () => setOriginal(''));
-            refs.clearChangedBtn.addEventListener('click', () => setChanged(''));
-            refs.openOriginalBtn.addEventListener('click', () => refs.originalFileInput.click());
-            refs.openChangedBtn.addEventListener('click', () => refs.changedFileInput.click());
-            refs.originalFileInput.addEventListener('change', () => loadTextFile(refs.originalFileInput.files[0], setOriginal, 'Original file loaded'));
-            refs.changedFileInput.addEventListener('change', () => loadTextFile(refs.changedFileInput.files[0], setChanged, 'Changed file loaded'));
-            refs.copyResultBtn.addEventListener('click', copyDiffResult);
-            refs.copyChangedOnlyBtn.addEventListener('click', () => copyText(refs.changedText.value, 'Changed text copied'));
-            refs.downloadDiffBtn.addEventListener('click', downloadDiff);
-
-            document.addEventListener('keydown', event => {
-                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault();
-                    compareNow();
-                }
-            });
-        }
-
-        function scheduleCompare() {
-            clearTimeout(compareTimer);
-            compareTimer = setTimeout(compareNow, 180);
-        }
-
-        function compareNow() {
-            const original = prepareText(refs.originalText.value);
-            const changed = prepareText(refs.changedText.value);
-            const originalTokens = tokenize(original, refs.compareMode.value);
-            const changedTokens = tokenize(changed, refs.compareMode.value);
-            const cellCount = originalTokens.length * changedTokens.length;
-
-            if (cellCount > 8000000) {
-                setStatus('Large comparison may be slow', 'warn');
-            } else {
-                setStatus('Comparing...');
-            }
-
-            latestDiff = diffTokens(originalTokens, changedTokens);
-            latestPlainDiff = makePlainDiff(latestDiff);
-            renderResult(latestDiff);
-            updateStats(latestDiff, originalTokens.length, changedTokens.length);
-            setStatus('Ready', 'good');
-        }
-
-        function prepareText(text) {
-            let result = text;
-
-            if (refs.whitespaceMode.value === 'trim') {
-                result = result.split('\n').map(line => line.trim()).join('\n');
-            }
-
-            if (refs.whitespaceMode.value === 'collapse') {
-                result = result.replace(/[ \t]+/g, ' ').replace(/[ \t]*\n[ \t]*/g, '\n');
-            }
-
-            if (refs.ignoreBlankLines.checked) {
-                result = result.split('\n').filter(line => line.trim()).join('\n');
-            }
-
-            return result;
-        }
-
-        function tokenize(text, mode) {
-            if (!text) return [];
-
-            if (mode === 'line') {
-                const parts = text.split('\n');
-                return parts.map((line, index) => makeToken(line + (index < parts.length - 1 ? '\n' : '')));
-            }
-
-            if (mode === 'word') {
-                const parts = text.match(/\s+|[^\s]+/g) || [];
-                return parts.map(makeToken);
-            }
-
-            return Array.from(text).map(makeToken);
-        }
-
-        function makeToken(value) {
-            const key = refs.caseMode.value === 'ignore' ? value.toLocaleLowerCase() : value;
-            return { value, key };
-        }
-
-        function diffTokens(originalTokens, changedTokens) {
-            const n = originalTokens.length;
-            const m = changedTokens.length;
-
-            if (!n && !m) return [];
-            if (!n) return mergeOps(changedTokens.map(token => ({ type: 'insert', value: token.value })));
-            if (!m) return mergeOps(originalTokens.map(token => ({ type: 'delete', value: token.value })));
-
-            const cells = n * m;
-            if (cells > 12000000) {
-                return greedyDiff(originalTokens, changedTokens);
-            }
-
-            const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-
-            for (let i = n - 1; i >= 0; i -= 1) {
-                const row = dp[i];
-                const next = dp[i + 1];
-
-                for (let j = m - 1; j >= 0; j -= 1) {
-                    row[j] = originalTokens[i].key === changedTokens[j].key
-                        ? next[j + 1] + 1
-                        : Math.max(next[j], row[j + 1]);
-                }
-            }
-
-            const ops = [];
-            let i = 0;
-            let j = 0;
-
-            while (i < n && j < m) {
-                if (originalTokens[i].key === changedTokens[j].key) {
-                    ops.push({ type: 'equal', value: originalTokens[i].value });
-                    i += 1;
-                    j += 1;
-                } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-                    ops.push({ type: 'delete', value: originalTokens[i].value });
-                    i += 1;
-                } else {
-                    ops.push({ type: 'insert', value: changedTokens[j].value });
-                    j += 1;
-                }
-            }
-
-            while (i < n) {
-                ops.push({ type: 'delete', value: originalTokens[i].value });
-                i += 1;
-            }
-
-            while (j < m) {
-                ops.push({ type: 'insert', value: changedTokens[j].value });
-                j += 1;
-            }
-
-            return mergeOps(ops);
-        }
-
-        function greedyDiff(originalTokens, changedTokens) {
-            const ops = [];
-            const max = Math.max(originalTokens.length, changedTokens.length);
-
-            for (let index = 0; index < max; index += 1) {
-                const original = originalTokens[index];
-                const changed = changedTokens[index];
-
-                if (original && changed && original.key === changed.key) {
-                    ops.push({ type: 'equal', value: original.value });
-                } else {
-                    if (original) ops.push({ type: 'delete', value: original.value });
-                    if (changed) ops.push({ type: 'insert', value: changed.value });
-                }
-            }
-
-            return mergeOps(ops);
-        }
-
-        function mergeOps(ops) {
-            const merged = [];
-
-            ops.forEach(op => {
-                const previous = merged[merged.length - 1];
-                if (previous && previous.type === op.type) {
-                    previous.value += op.value;
-                } else {
-                    merged.push({ ...op });
-                }
-            });
-
-            return merged;
-        }
-
-        function renderResult(diff) {
-            refs.resultModeLabel.textContent = getViewLabel();
-            refs.resultArea.innerHTML = '';
-
-            if (!refs.originalText.value && !refs.changedText.value) {
-                refs.resultArea.innerHTML = '<div class="empty-state">Paste two texts to compare.</div>';
-                return;
-            }
-
-            if (!diff.some(op => op.type !== 'equal')) {
-                refs.resultArea.innerHTML = '<div class="empty-state">No differences found.</div>';
-                return;
-            }
-
-            if (refs.viewMode.value === 'inline') {
-                renderInline(diff);
-            } else if (refs.viewMode.value === 'full') {
-                renderFullDiff(diff);
-            } else if (refs.viewMode.value === 'diffs') {
-                renderDiffsOnly(diff);
-            } else {
-                renderSideBySide(diff);
-            }
-        }
-
-        function renderSideBySide(diff) {
-            const grid = document.createElement('div');
-            grid.className = 'result-grid';
-
-            const left = createResultPane('Original');
-            const right = createResultPane('Changed');
-            const leftOutput = left.querySelector('.diff-output');
-            const rightOutput = right.querySelector('.diff-output');
-
-            diff.forEach(op => {
-                if (op.type === 'equal') {
-                    appendToken(leftOutput, 'equal', op.value);
-                    appendToken(rightOutput, 'equal', op.value);
-                } else if (op.type === 'delete') {
-                    appendToken(leftOutput, 'delete', op.value);
-                } else {
-                    appendToken(rightOutput, 'insert', op.value);
-                }
-            });
-
-            applyWrapMode(leftOutput);
-            applyWrapMode(rightOutput);
-            grid.append(left, right);
-            refs.resultArea.appendChild(grid);
-        }
-
-        function renderInline(diff) {
-            const output = document.createElement('div');
-            output.className = 'inline-result';
-            applyWrapMode(output);
-
-            diff.forEach(op => appendToken(output, op.type, op.value));
-            refs.resultArea.appendChild(output);
-        }
-
-        function renderDiffsOnly(diff) {
-            const output = document.createElement('div');
-            output.className = 'diffs-result';
-            applyWrapMode(output);
-
-            if (refs.compareMode.value === 'line') {
-                renderLineHunks(output, diff);
-            } else {
-                renderChangedTokensOnly(output, diff);
-            }
-
-            refs.resultArea.appendChild(output);
-        }
-
-        function renderFullDiff(diff) {
-            const output = document.createElement('div');
-            output.className = 'full-diff-result';
-            applyWrapMode(output);
-
-            if (refs.compareMode.value === 'line') {
-                const list = document.createElement('div');
-                list.className = 'full-diff-list';
-                expandLineOps(diff).forEach(op => appendLineBlock(list, op, 'full'));
-                output.appendChild(list);
-            } else {
-                diff.forEach(op => {
-                    if (op.type === 'equal') {
-                        appendToken(output, 'equal', op.value);
-                    } else {
-                        appendToken(output, op.type, `${op.type === 'delete' ? '- ' : '+ '}${op.value}`);
-                        output.appendChild(document.createTextNode('\n'));
-                    }
-                });
-            }
-
-            refs.resultArea.appendChild(output);
-        }
-
-        function renderLineHunks(output, diff) {
-            const context = Math.max(0, Number(refs.contextLines.value) || 0);
-            const lineOps = expandLineOps(diff);
-            const changedIndexes = lineOps
-                .map((op, index) => op.type === 'equal' ? -1 : index)
-                .filter(index => index >= 0);
-
-            if (!changedIndexes.length) {
-                output.innerHTML = '<div class="empty-state">No differences found.</div>';
-                return;
-            }
-
-            const ranges = [];
-            changedIndexes.forEach(index => {
-                const start = Math.max(0, index - context);
-                const end = Math.min(lineOps.length - 1, index + context);
-                const previous = ranges[ranges.length - 1];
-
-                if (previous && start <= previous.end + 1) {
-                    previous.end = Math.max(previous.end, end);
-                } else {
-                    ranges.push({ start, end });
-                }
-            });
-
-            ranges.forEach((range, hunkIndex) => {
-                const hunk = document.createElement('div');
-                hunk.className = 'hunk';
-
-                const title = document.createElement('div');
-                title.className = 'hunk-title';
-                title.innerHTML = `<span>Difference ${hunkIndex + 1}</span><span>${range.end - range.start + 1} shown lines</span>`;
-                hunk.appendChild(title);
-
-                for (let index = range.start; index <= range.end; index += 1) {
-                    appendLineBlock(hunk, lineOps[index], 'context');
-                }
-
-                output.appendChild(hunk);
-            });
-        }
-
-        function appendLineBlock(parent, op, tone = '') {
-            const line = document.createElement('span');
-            const contextClass = op.type === 'equal' && tone ? ` ${tone}` : '';
-            line.className = `line-block ${op.type}${contextClass}`;
-
-            const prefix = document.createElement('span');
-            prefix.className = 'line-prefix';
-            prefix.textContent = linePrefix(op.type);
-
-            const text = document.createElement('span');
-            text.className = 'line-text';
-            text.textContent = op.value || ' ';
-
-            line.append(prefix, text);
-            parent.appendChild(line);
-        }
-
-        function renderChangedTokensOnly(output, diff) {
-            let addedSomething = false;
-
-            diff.forEach(op => {
-                if (op.type === 'equal') return;
-                addedSomething = true;
-                appendToken(output, op.type, `${op.type === 'delete' ? '- ' : '+ '}${op.value}`);
-                output.appendChild(document.createTextNode('\n'));
-            });
-
-            if (!addedSomething) {
-                output.innerHTML = '<div class="empty-state">No differences found.</div>';
-            }
-        }
-
-        function expandLineOps(diff) {
-            const expanded = [];
-
-            diff.forEach(op => {
-                splitLinesKeepingEnd(op.value).forEach(line => {
-                    if (line || op.value) expanded.push({ type: op.type, value: line });
-                });
-            });
-
-            return expanded;
-        }
-
-        function splitLinesKeepingEnd(value) {
-            if (!value) return [];
-            const parts = value.split('\n');
-            return parts.map((line, index) => line + (index < parts.length - 1 ? '\n' : '')).filter(line => line.length);
-        }
-
-        function createResultPane(title) {
-            const pane = document.createElement('section');
-            pane.className = 'result-pane';
-
-            const header = document.createElement('div');
-            header.className = 'result-header';
-
-            const heading = document.createElement('div');
-            heading.className = 'pane-title';
-            heading.textContent = title;
-
-            header.appendChild(heading);
-
-            const output = document.createElement('div');
-            output.className = 'diff-output';
-
-            pane.append(header, output);
-            return pane;
-        }
-
-        function appendToken(parent, type, value) {
-            if (!value) return;
-
-            const span = document.createElement('span');
-            span.className = `token ${type}`;
-            span.textContent = value;
-            parent.appendChild(span);
-        }
-
-        function applyWrapMode(element) {
-            element.classList.toggle('nowrap', refs.wrapMode.value === 'nowrap');
-        }
-
-        function updateStats(diff, originalCount, changedCount) {
-            const added = diff.filter(op => op.type === 'insert').reduce((sum, op) => sum + countUnits(op.value), 0);
-            const removed = diff.filter(op => op.type === 'delete').reduce((sum, op) => sum + countUnits(op.value), 0);
-            const unchanged = diff.filter(op => op.type === 'equal').reduce((sum, op) => sum + countUnits(op.value), 0);
-            const total = Math.max(originalCount, changedCount, 1);
-            const similarity = Math.round((unchanged / total) * 100);
-
-            refs.addedStat.textContent = String(added);
-            refs.removedStat.textContent = String(removed);
-            refs.unchangedStat.textContent = String(unchanged);
-            refs.similarityStat.textContent = `${Math.min(100, similarity)}%`;
-        }
-
-        function countUnits(value) {
-            if (refs.compareMode.value === 'line') return splitLinesKeepingEnd(value).length;
-            if (refs.compareMode.value === 'word') return (value.match(/\s+|[^\s]+/g) || []).filter(part => !/^\s+$/.test(part)).length;
-            return Array.from(value).length;
-        }
-
-        function makePlainDiff(diff) {
-            const lines = [];
-
-            diff.forEach(op => {
-                const prefix = linePrefix(op.type);
-                splitLinesKeepingEnd(op.value).forEach(line => {
-                    lines.push(`${prefix} ${line.replace(/\n$/, '')}`);
-                });
-            });
-
-            return lines.join('\n');
-        }
-
-        function linePrefix(type) {
-            if (type === 'insert') return '+';
-            if (type === 'delete') return '-';
-            return ' ';
-        }
-
-        function updateCounts() {
-            refs.originalCount.textContent = refs.originalText.value.length;
-            refs.changedCount.textContent = refs.changedText.value.length;
-            refs.originalLines.textContent = countLines(refs.originalText.value);
-            refs.changedLines.textContent = countLines(refs.changedText.value);
-        }
-
-        function countLines(value) {
-            return value ? value.split('\n').length : 0;
-        }
-
-        function getViewLabel() {
-            if (refs.viewMode.value === 'inline') return 'Inline';
-            if (refs.viewMode.value === 'full') return 'Full Diff';
-            if (refs.viewMode.value === 'diffs') return 'Only Differences';
-            return 'Side by Side';
-        }
-
-        function swapTexts() {
-            const original = refs.originalText.value;
-            setOriginal(refs.changedText.value);
-            setChanged(original);
-            compareNow();
-            toast('Texts swapped');
-        }
-
-        function loadSample() {
-            setOriginal(SAMPLE_ORIGINAL);
-            setChanged(SAMPLE_CHANGED);
-            compareNow();
-            toast('Sample loaded');
-        }
-
-        function clearAll() {
-            setOriginal('');
-            setChanged('');
-            compareNow();
-            toast('Cleared');
-        }
-
-        function setOriginal(value) {
-            refs.originalText.value = value;
-            localStorage.setItem(STORAGE.original, value);
-            updateCounts();
-            scheduleCompare();
-        }
-
-        function setChanged(value) {
-            refs.changedText.value = value;
-            localStorage.setItem(STORAGE.changed, value);
-            updateCounts();
-            scheduleCompare();
-        }
-
-        function copyDiffResult() {
-            if (!latestDiff.some(op => op.type !== 'equal')) {
-                toast('No differences to copy');
-                return;
-            }
-
-            copyText(latestPlainDiff, 'Diff copied');
-        }
-
-        function downloadDiff() {
-            if (!latestDiff.some(op => op.type !== 'equal')) {
-                toast('No differences to download');
-                return;
-            }
-
-            const header = [
-                'Text Diff Studio',
-                `Generated: ${new Date().toLocaleString()}`,
-                `Compare by: ${refs.compareMode.value}`,
-                `View: ${getViewLabel()}`,
-                ''
-            ].join('\n');
-
-            const blob = new Blob([header + latestPlainDiff], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `text-diff-${new Date().toISOString().slice(0, 10)}.txt`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            toast('Diff downloaded');
-        }
-
-        function loadTextFile(file, setter, message) {
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = () => {
-                setter(String(reader.result || ''));
-                compareNow();
-                toast(message);
-            };
-            reader.onerror = () => toast('Could not read that file');
-            reader.readAsText(file);
-        }
-
-        function copyText(value, message) {
-            if (!value) {
-                toast('Nothing to copy');
-                return;
-            }
-
-            navigator.clipboard.writeText(value)
-                .then(() => toast(message))
-                .catch(() => toast('Clipboard copy was blocked'));
-        }
-
-        function savePrefs() {
-            const prefs = {
-                compareMode: refs.compareMode.value,
-                viewMode: refs.viewMode.value,
-                whitespaceMode: refs.whitespaceMode.value,
-                caseMode: refs.caseMode.value,
-                contextLines: refs.contextLines.value,
-                wrapMode: refs.wrapMode.value,
-                ignoreBlankLines: refs.ignoreBlankLines.checked
-            };
-            localStorage.setItem(STORAGE.prefs, JSON.stringify(prefs));
-        }
-
-        function loadJson(key, fallback) {
-            try {
-                const raw = localStorage.getItem(key);
-                return raw ? JSON.parse(raw) : fallback;
-            } catch (error) {
-                return fallback;
-            }
-        }
-
-        function setStatus(message, tone = '') {
-            refs.statusPill.textContent = message;
-            refs.statusPill.classList.toggle('good', tone === 'good');
-            refs.statusPill.classList.toggle('warn', tone === 'warn');
-        }
-
-        function toast(message) {
-            const el = document.createElement('div');
-            el.className = 'toast';
-            el.textContent = message;
-            refs.toastContainer.appendChild(el);
-            setTimeout(() => el.remove(), 2800);
-        }
-    </script>
 </body>
 
 </html>
