@@ -42,6 +42,17 @@ const refs = {};
 let renderTimer = 0;
 let savedTimer = 0;
 let latestMathCount = 0;
+let typingEvents = [];
+let sessionBaselineWords = 0;
+let sessionMilestones = new Set();
+let lastSourceValue = '';
+let typingAudio = null;
+let typingMasterGain = null;
+let typingAudioUnlockHintShown = false;
+let lastKeystrokeSoundAt = 0;
+
+const SESSION_MILESTONES = [50, 100, 250, 500, 1000];
+const PASTE_CHAR_THRESHOLD = 24;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -52,13 +63,24 @@ function init() {
     refs.noteTitle.value = localStorage.getItem(STORAGE.title) || 'Untitled LaTeX note';
     refs.sourceInput.value = localStorage.getItem(STORAGE.source) || '';
     refs.livePreviewToggle.checked = prefs.livePreview !== false;
-    refs.editorSize.value = prefs.editorSize || document.documentElement.dataset.editorSize || 'medium';
+    refs.editorSize.value = prefs.editorSize || document.documentElement.dataset.editorSize || 'large';
+    refs.editorFont.value = prefs.editorFont || document.documentElement.dataset.editorFont || 'literata';
+    refs.typingSoundToggle.checked = prefs.typingSound === undefined
+        ? true
+        : Boolean(prefs.typingSound);
+    refs.typingSoundStyle.value = prefs.typingSoundStyle || 'keystroke';
 
     setTheme(prefs.theme || document.documentElement.dataset.theme || 'dark', false);
     setEditorSize(refs.editorSize.value, false);
+    setEditorFont(refs.editorFont.value, false);
+    setFocusMode(prefs.focusMode === true, false);
+    setTypingSoundUi();
     bindEvents();
     refreshIcons();
+    lastSourceValue = refs.sourceInput.value;
+    sessionBaselineWords = countWords(refs.sourceInput.value);
     updateStats();
+    updateWritingMetrics();
     renderNote();
     refs.sourceInput.focus();
 }
@@ -82,8 +104,16 @@ function bindRefs() {
         'characterCount',
         'wordCount',
         'lineCount',
+        'wpmCount',
+        'sessionStat',
+        'sessionWords',
+        'focusModeBtn',
         'livePreviewToggle',
+        'typingSoundToggle',
+        'typingSoundStyle',
+        'typingSoundStyleWrap',
         'editorSize',
+        'editorFont',
         'mathCount',
         'savedStamp',
         'copyPreviewBtn',
@@ -100,20 +130,14 @@ function bindEvents() {
     refs.noteTitle.addEventListener('input', () => {
         localStorage.setItem(STORAGE.title, refs.noteTitle.value);
         markSaved();
-    });
-
-    refs.sourceInput.addEventListener('input', () => {
-        localStorage.setItem(STORAGE.source, refs.sourceInput.value);
-        updateStats();
-        markSaved();
         if (refs.livePreviewToggle.checked) {
             scheduleRender();
-        } else {
-            setStatus('Saved', 'good');
         }
     });
 
+    refs.sourceInput.addEventListener('input', handleSourceInput);
     refs.sourceInput.addEventListener('keydown', handleEditorKeydown);
+    bindTypingAudioUnlock();
     refs.renderBtn.addEventListener('click', renderNote);
     refs.loadSampleBtn.addEventListener('click', loadSample);
     refs.openFileBtn.addEventListener('click', () => refs.fileInput.click());
@@ -137,6 +161,26 @@ function bindEvents() {
     });
 
     refs.editorSize.addEventListener('change', () => setEditorSize(refs.editorSize.value));
+    refs.editorFont.addEventListener('change', () => setEditorFont(refs.editorFont.value));
+    refs.focusModeBtn.addEventListener('click', () => setFocusMode(document.documentElement.dataset.focusMode !== 'on'));
+    refs.typingSoundToggle.addEventListener('change', async () => {
+        setTypingSoundUi();
+        savePrefs();
+        typingAudioUnlockHintShown = false;
+
+        if (refs.typingSoundToggle.checked) {
+            const played = await playTypingSound('a');
+            if (!played) {
+                toast('Click in the editor, then type to hear keystroke sounds');
+            }
+        }
+    });
+    refs.typingSoundStyle.addEventListener('change', async () => {
+        savePrefs();
+        if (refs.typingSoundToggle.checked) {
+            await playTypingSound('a');
+        }
+    });
 
     document.querySelectorAll('[data-theme-choice]').forEach(button => {
         button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
@@ -154,7 +198,34 @@ function bindEvents() {
     });
 }
 
+function handleSourceInput() {
+    const previous = lastSourceValue;
+    const current = refs.sourceInput.value;
+    const delta = current.length - previous.length;
+
+    if (delta > 0 && delta <= PASTE_CHAR_THRESHOLD) {
+        recordTyping(delta);
+    }
+
+    lastSourceValue = current;
+    localStorage.setItem(STORAGE.source, current);
+    updateStats();
+    updateWritingMetrics();
+    checkSessionMilestones();
+    markSaved();
+
+    if (refs.livePreviewToggle.checked) {
+        scheduleRender();
+    } else {
+        setStatus('Saved', 'good');
+    }
+}
+
 function handleEditorKeydown(event) {
+    if (shouldPlayTypingSound(event)) {
+        void playTypingSound(event.key, event.repeat);
+    }
+
     if (event.key === 'Tab') {
         event.preventDefault();
         insertAtSelection('    ', '');
@@ -170,7 +241,432 @@ function handleEditorKeydown(event) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'i') {
         event.preventDefault();
         insertSnippet('italic');
+        return;
     }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        setFocusMode(document.documentElement.dataset.focusMode !== 'on');
+        return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+        const input = refs.sourceInput;
+        const hasSelection = input.selectionStart !== input.selectionEnd;
+
+        if (!hasSelection) {
+            event.preventDefault();
+            copyText(input.value, 'Source copied');
+        }
+    }
+}
+
+function shouldPlayTypingSound(event) {
+    if (!refs.typingSoundToggle.checked) {
+        return false;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+        return false;
+    }
+
+    return event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter' || event.key === ' ';
+}
+
+function recordTyping(chars) {
+    const now = Date.now();
+    typingEvents.push({ time: now, chars });
+    const cutoff = now - 60000;
+    typingEvents = typingEvents.filter(entry => entry.time >= cutoff);
+}
+
+function updateWritingMetrics() {
+    const now = Date.now();
+    const cutoff = now - 60000;
+    typingEvents = typingEvents.filter(entry => entry.time >= cutoff);
+
+    let wpm = 0;
+    if (typingEvents.length) {
+        const totalChars = typingEvents.reduce((sum, entry) => sum + entry.chars, 0);
+        const windowMs = Math.max(now - typingEvents[0].time, 1000);
+        wpm = Math.round((totalChars / 5) / (windowMs / 60000));
+    }
+
+    refs.wpmCount.textContent = String(wpm);
+
+    const sessionWords = Math.max(0, countWords(refs.sourceInput.value) - sessionBaselineWords);
+    refs.sessionWords.textContent = String(sessionWords);
+    refs.sessionStat.hidden = sessionWords < 5;
+}
+
+function checkSessionMilestones() {
+    const sessionWords = Math.max(0, countWords(refs.sourceInput.value) - sessionBaselineWords);
+
+    for (const milestone of SESSION_MILESTONES) {
+        if (sessionWords >= milestone && !sessionMilestones.has(milestone)) {
+            sessionMilestones.add(milestone);
+            toast(`Nice pace — ${milestone} words revised this session`);
+        }
+    }
+}
+
+function setFocusMode(enabled, persist = true) {
+    document.documentElement.dataset.focusMode = enabled ? 'on' : 'off';
+    refs.focusModeBtn.setAttribute('aria-pressed', String(enabled));
+    refs.focusModeBtn.querySelector('span').textContent = enabled ? 'Split' : 'Focus';
+
+    if (persist) {
+        savePrefs();
+    }
+}
+
+function setTypingSoundUi() {
+    const enabled = refs.typingSoundToggle.checked;
+    refs.typingSoundStyleWrap.hidden = !enabled;
+}
+
+function bindTypingAudioUnlock() {
+    const unlock = () => {
+        void ensureTypingAudioReady();
+    };
+
+    ['pointerdown', 'touchstart', 'keydown'].forEach(eventName => {
+        document.addEventListener(eventName, unlock, { capture: true, passive: true });
+    });
+}
+
+function createTypingAudioContext() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+        return null;
+    }
+
+    if (!typingAudio) {
+        typingAudio = new AudioContextClass();
+        typingMasterGain = typingAudio.createGain();
+        typingMasterGain.gain.value = 1;
+        typingMasterGain.connect(typingAudio.destination);
+    }
+
+    return typingAudio;
+}
+
+async function ensureTypingAudioReady() {
+    const context = createTypingAudioContext();
+    if (!context) {
+        return null;
+    }
+
+    if (context.state !== 'running') {
+        try {
+            await context.resume();
+        } catch (error) {
+            void error;
+            return null;
+        }
+    }
+
+    return context.state === 'running' ? context : null;
+}
+
+function getTypingOutput(context) {
+    return typingMasterGain || context.destination;
+}
+
+async function playTypingSound(key, isRepeat = false) {
+    if (!refs.typingSoundToggle.checked) {
+        return false;
+    }
+
+    const nowMs = Date.now();
+    const minGap = isRepeat ? 16 : 10;
+    if (nowMs - lastKeystrokeSoundAt < minGap) {
+        return true;
+    }
+    lastKeystrokeSoundAt = nowMs;
+
+    try {
+        const context = await ensureTypingAudioReady();
+        if (!context) {
+            maybeShowTypingAudioHint();
+            return false;
+        }
+
+        const style = refs.typingSoundStyle.value;
+        const at = context.currentTime + 0.005;
+
+        playTypingSoundStyle(context, style, key, at);
+
+        return true;
+    } catch (error) {
+        void error;
+        maybeShowTypingAudioHint();
+        return false;
+    }
+}
+
+function maybeShowTypingAudioHint() {
+    if (typingAudioUnlockHintShown || !refs.typingSoundToggle.checked) {
+        return;
+    }
+
+    typingAudioUnlockHintShown = true;
+    toast('Click in the editor, then type to hear keystroke sounds');
+}
+
+function setGainEnvelope(gain, now, peak, attack = 0.002, release = 0.04) {
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(peak, now + attack);
+    gain.gain.linearRampToValueAtTime(0.0001, now + release);
+}
+
+function playTypingSoundStyle(context, style, key, now) {
+    switch (style) {
+        case 'piano':
+            playPianoTone(context, key, now);
+            break;
+        case 'soft':
+            playSoftClick(context, now);
+            break;
+        case 'typewriter':
+            playTypewriterSound(context, key, now);
+            break;
+        case 'bubble':
+            playBubbleSound(context, key, now);
+            break;
+        case 'marble':
+            playMarbleSound(context, key, now);
+            break;
+        case 'chime':
+            playChimeSound(context, key, now);
+            break;
+        case 'keystroke':
+        default:
+            playMechanicalKeystroke(context, key, now);
+            break;
+    }
+}
+
+function playMechanicalKeystroke(context, key, now) {
+    const output = getTypingOutput(context);
+    const keyCode = String(key || 'a').charCodeAt(0);
+    const isBackspace = key === 'Backspace';
+    const isEnter = key === 'Enter';
+
+    const clickLength = Math.floor(context.sampleRate * 0.045);
+    const clickBuffer = context.createBuffer(1, clickLength, context.sampleRate);
+    const clickData = clickBuffer.getChannelData(0);
+
+    for (let index = 0; index < clickLength; index += 1) {
+        const decay = Math.exp(-index / (clickLength * (isBackspace ? 0.1 : 0.075)));
+        clickData[index] = (Math.random() * 2 - 1) * decay;
+    }
+
+    const click = context.createBufferSource();
+    click.buffer = clickBuffer;
+
+    const clickFilter = context.createBiquadFilter();
+    clickFilter.type = 'bandpass';
+    clickFilter.frequency.value = isEnter ? 2100 : isBackspace ? 1650 : 2400 + (keyCode % 500);
+    clickFilter.Q.value = 1.1;
+
+    const clickGain = context.createGain();
+    const clickPeak = isBackspace ? 0.28 : isEnter ? 0.32 : 0.38;
+    setGainEnvelope(clickGain, now, clickPeak, 0.001, 0.035);
+
+    click.connect(clickFilter);
+    clickFilter.connect(clickGain);
+    clickGain.connect(output);
+    click.start(now);
+    click.stop(now + 0.05);
+
+    const body = context.createOscillator();
+    body.type = 'sine';
+    const bodyStart = isBackspace ? 130 : isEnter ? 110 : 155 + (keyCode % 35);
+    body.frequency.setValueAtTime(bodyStart, now);
+    body.frequency.exponentialRampToValueAtTime(bodyStart * 0.55, now + 0.028);
+
+    const bodyGain = context.createGain();
+    setGainEnvelope(bodyGain, now, isBackspace ? 0.14 : 0.18, 0.002, 0.04);
+
+    body.connect(bodyGain);
+    bodyGain.connect(output);
+    body.start(now);
+    body.stop(now + 0.05);
+}
+
+function playTypewriterSound(context, key, now) {
+    const output = getTypingOutput(context);
+    const keyCode = String(key || 'a').charCodeAt(0);
+    const isBackspace = key === 'Backspace';
+
+    const snapLength = Math.floor(context.sampleRate * 0.06);
+    const snapBuffer = context.createBuffer(1, snapLength, context.sampleRate);
+    const snapData = snapBuffer.getChannelData(0);
+
+    for (let index = 0; index < snapLength; index += 1) {
+        const decay = Math.exp(-index / (snapLength * 0.055));
+        snapData[index] = (Math.random() * 2 - 1) * decay;
+    }
+
+    const snap = context.createBufferSource();
+    snap.buffer = snapBuffer;
+
+    const snapFilter = context.createBiquadFilter();
+    snapFilter.type = 'highpass';
+    snapFilter.frequency.value = isBackspace ? 900 : 1400;
+
+    const snapGain = context.createGain();
+    setGainEnvelope(snapGain, now, isBackspace ? 0.34 : 0.42, 0.001, 0.03);
+
+    snap.connect(snapFilter);
+    snapFilter.connect(snapGain);
+    snapGain.connect(output);
+    snap.start(now);
+    snap.stop(now + 0.065);
+
+    const slap = context.createOscillator();
+    slap.type = 'square';
+    slap.frequency.setValueAtTime(isBackspace ? 95 : 120 + (keyCode % 20), now);
+    slap.frequency.exponentialRampToValueAtTime(60, now + 0.02);
+
+    const slapFilter = context.createBiquadFilter();
+    slapFilter.type = 'lowpass';
+    slapFilter.frequency.value = 320;
+
+    const slapGain = context.createGain();
+    setGainEnvelope(slapGain, now, 0.08, 0.001, 0.025);
+
+    slap.connect(slapFilter);
+    slapFilter.connect(slapGain);
+    slapGain.connect(output);
+    slap.start(now);
+    slap.stop(now + 0.04);
+}
+
+function playBubbleSound(context, key, now) {
+    const output = getTypingOutput(context);
+    const keyCode = String(key || 'a').charCodeAt(0);
+    const pop = context.createOscillator();
+    pop.type = 'sine';
+    const startFreq = 320 + (keyCode % 120);
+    pop.frequency.setValueAtTime(startFreq, now);
+    pop.frequency.exponentialRampToValueAtTime(Math.max(startFreq * 0.45, 90), now + 0.07);
+
+    const popGain = context.createGain();
+    setGainEnvelope(popGain, now, 0.2, 0.003, 0.09);
+
+    pop.connect(popGain);
+    popGain.connect(output);
+    pop.start(now);
+    pop.stop(now + 0.1);
+}
+
+function playMarbleSound(context, key, now) {
+    const output = getTypingOutput(context);
+    const keyCode = String(key || 'a').charCodeAt(0);
+    const tapLength = Math.floor(context.sampleRate * 0.035);
+    const tapBuffer = context.createBuffer(1, tapLength, context.sampleRate);
+    const tapData = tapBuffer.getChannelData(0);
+
+    for (let index = 0; index < tapLength; index += 1) {
+        const decay = Math.exp(-index / (tapLength * 0.12));
+        tapData[index] = (Math.random() * 2 - 1) * decay;
+    }
+
+    const tap = context.createBufferSource();
+    tap.buffer = tapBuffer;
+
+    const tapFilter = context.createBiquadFilter();
+    tapFilter.type = 'bandpass';
+    tapFilter.frequency.value = 520 + (keyCode % 180);
+    tapFilter.Q.value = 0.8;
+
+    const tapGain = context.createGain();
+    setGainEnvelope(tapGain, now, 0.26, 0.001, 0.028);
+
+    tap.connect(tapFilter);
+    tapFilter.connect(tapGain);
+    tapGain.connect(output);
+    tap.start(now);
+    tap.stop(now + 0.04);
+}
+
+function playChimeSound(context, key, now) {
+    const output = getTypingOutput(context);
+    const base = 620 + (String(key || 'a').charCodeAt(0) % 160);
+    const tone = context.createOscillator();
+    const shimmer = context.createOscillator();
+
+    tone.type = 'sine';
+    shimmer.type = 'triangle';
+    tone.frequency.setValueAtTime(base, now);
+    shimmer.frequency.setValueAtTime(base * 1.5, now);
+
+    const gain = context.createGain();
+    setGainEnvelope(gain, now, 0.14, 0.004, 0.14);
+
+    tone.connect(gain);
+    shimmer.connect(gain);
+    gain.connect(output);
+
+    tone.start(now);
+    shimmer.start(now);
+    tone.stop(now + 0.16);
+    shimmer.stop(now + 0.16);
+}
+
+function playSoftClick(context, now) {
+    const output = getTypingOutput(context);
+    const click = context.createOscillator();
+    const gain = context.createGain();
+    const filter = context.createBiquadFilter();
+
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(920, now);
+    click.frequency.exponentialRampToValueAtTime(520, now + 0.03);
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 1800;
+
+    setGainEnvelope(gain, now, 0.22, 0.003, 0.05);
+
+    click.connect(filter);
+    filter.connect(gain);
+    gain.connect(output);
+
+    click.start(now);
+    click.stop(now + 0.06);
+}
+
+function playPianoTone(context, key, now) {
+    const output = getTypingOutput(context);
+    const base = pianoFrequency(key);
+    const tone = context.createOscillator();
+    const overtone = context.createOscillator();
+    const gain = context.createGain();
+
+    tone.type = 'sine';
+    overtone.type = 'triangle';
+    tone.frequency.setValueAtTime(base, now);
+    overtone.frequency.setValueAtTime(base * 2, now);
+
+    setGainEnvelope(gain, now, 0.16, 0.008, 0.18);
+
+    tone.connect(gain);
+    overtone.connect(gain);
+    gain.connect(output);
+
+    tone.start(now);
+    overtone.start(now);
+    tone.stop(now + 0.2);
+    overtone.stop(now + 0.2);
+}
+
+function pianoFrequency(key) {
+    const code = String(key || 'a').charCodeAt(0);
+    const scale = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 523.25];
+    return scale[code % scale.length];
 }
 
 function scheduleRender() {
@@ -183,7 +679,7 @@ function renderNote() {
     clearTimeout(renderTimer);
 
     const source = refs.sourceInput.value;
-    refs.previewOutput.innerHTML = buildPreviewHtml(source);
+    refs.previewOutput.innerHTML = buildPreviewHtml(source, refs.noteTitle.value);
 
     let diagnostics = [];
     if (window.katex && source.trim()) {
@@ -207,11 +703,12 @@ function renderNote() {
     }
 }
 
-function buildPreviewHtml(source) {
+function buildPreviewHtml(source, title = '') {
     const normalized = source.replace(/\r\n?/g, '\n');
+    const previewTitle = buildPreviewTitle(title);
 
     if (!normalized.trim()) {
-        return '<div class="empty-preview">Your rendered note will appear here.</div>';
+        return `${previewTitle}<div class="empty-preview">Your rendered note will appear here.<br>Paste dictated text in the editor and revise it here.</div>`;
     }
 
     const lines = normalized.split('\n');
@@ -275,7 +772,16 @@ function buildPreviewHtml(source) {
     }
 
     flushParagraph();
-    return `<div class="latex-preview">${parts.join('\n')}</div>`;
+    return `${previewTitle}<div class="latex-preview">${parts.join('\n')}</div>`;
+}
+
+function buildPreviewTitle(title) {
+    const trimmed = String(title || '').trim();
+    if (!trimmed || trimmed === 'Untitled LaTeX note') {
+        return '';
+    }
+
+    return `<h1 class="preview-note-title">${escapeHtml(trimmed)}</h1><p class="preview-note-subtitle">Rendered preview</p>`;
 }
 
 function collectMathBlock(lines, startIndex) {
@@ -767,8 +1273,10 @@ function insertAtSelection(before, after, fallback = '') {
     input.focus();
     input.selectionStart = start + before.length;
     input.selectionEnd = start + before.length + selected.length;
+    lastSourceValue = input.value;
     localStorage.setItem(STORAGE.source, input.value);
     updateStats();
+    updateWritingMetrics();
     markSaved();
 
     if (refs.livePreviewToggle.checked) {
@@ -783,9 +1291,12 @@ function loadSample() {
 
     refs.noteTitle.value = 'Short derivation';
     refs.sourceInput.value = SAMPLE_NOTE;
+    lastSourceValue = refs.sourceInput.value;
+    resetWritingSession();
     localStorage.setItem(STORAGE.title, refs.noteTitle.value);
     localStorage.setItem(STORAGE.source, refs.sourceInput.value);
     updateStats();
+    updateWritingMetrics();
     markSaved();
     renderNote();
     toast('Sample loaded');
@@ -798,9 +1309,12 @@ function clearNote() {
 
     refs.sourceInput.value = '';
     refs.noteTitle.value = 'Untitled LaTeX note';
+    lastSourceValue = '';
+    resetWritingSession();
     localStorage.setItem(STORAGE.source, '');
     localStorage.setItem(STORAGE.title, refs.noteTitle.value);
     updateStats();
+    updateWritingMetrics();
     markSaved();
     renderNote();
     refs.sourceInput.focus();
@@ -815,9 +1329,12 @@ function loadFile() {
     reader.onload = () => {
         refs.sourceInput.value = String(reader.result || '');
         refs.noteTitle.value = file.name.replace(/\.[^.]+$/, '') || 'Imported note';
+        lastSourceValue = refs.sourceInput.value;
+        resetWritingSession();
         localStorage.setItem(STORAGE.source, refs.sourceInput.value);
         localStorage.setItem(STORAGE.title, refs.noteTitle.value);
         updateStats();
+        updateWritingMetrics();
         markSaved();
         renderNote();
         toast('File loaded');
@@ -1268,11 +1785,29 @@ function setEditorSize(size, persist = true) {
     }
 }
 
+function setEditorFont(font, persist = true) {
+    document.documentElement.dataset.editorFont = font;
+
+    if (persist) {
+        savePrefs();
+    }
+}
+
+function resetWritingSession() {
+    typingEvents = [];
+    sessionMilestones = new Set();
+    sessionBaselineWords = countWords(refs.sourceInput.value);
+}
+
 function savePrefs() {
     const prefs = {
         theme: document.documentElement.dataset.theme || 'dark',
         livePreview: refs.livePreviewToggle.checked,
-        editorSize: refs.editorSize.value
+        editorSize: refs.editorSize.value,
+        editorFont: refs.editorFont.value,
+        typingSound: refs.typingSoundToggle.checked,
+        typingSoundStyle: refs.typingSoundStyle.value,
+        focusMode: document.documentElement.dataset.focusMode === 'on'
     };
     localStorage.setItem(STORAGE.prefs, JSON.stringify(prefs));
 }

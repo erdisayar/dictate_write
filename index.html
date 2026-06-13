@@ -5,17 +5,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Temporary LaTeX Notes</title>
-    <meta name="description" content="A private browser scratchpad for short LaTeX notes and equations.">
+    <meta name="description" content="A comfortable writing space for post-dictation correction, LaTeX notes, and equations.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Nunito:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
     <script>
         (function () {
             try {
                 var prefs = JSON.parse(localStorage.getItem('temporary_latex_note_prefs') || '{}');
                 var fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 document.documentElement.dataset.theme = prefs.theme || fallback;
-                document.documentElement.dataset.editorSize = prefs.editorSize || 'medium';
+                document.documentElement.dataset.editorSize = prefs.editorSize || 'large';
+                document.documentElement.dataset.editorFont = prefs.editorFont || 'literata';
+                document.documentElement.dataset.focusMode = prefs.focusMode ? 'on' : 'off';
             } catch (error) {
                 document.documentElement.dataset.theme = 'dark';
-                document.documentElement.dataset.editorSize = 'medium';
+                document.documentElement.dataset.editorSize = 'large';
+                document.documentElement.dataset.editorFont = 'literata';
+                document.documentElement.dataset.focusMode = 'off';
             }
         }());
     </script>
@@ -40,7 +47,8 @@
             <div class="brand">
                 <div class="brand-mark" aria-hidden="true">TeX</div>
                 <div>
-                    <h1>Temporary LaTeX Notes</h1>
+                    <h1 class="app-title">Temporary LaTeX Notes</h1>
+                    <p class="app-subtitle">A calm space to revise dictated text and write with LaTeX</p>
                 </div>
             </div>
 
@@ -110,6 +118,7 @@
                 </div>
 
                 <div class="snippet-row" aria-label="Insert snippets">
+                    <span class="snippet-label">Insert</span>
                     <button class="chip-btn" type="button" data-snippet="inlineMath">
                         <i data-lucide="sigma"></i>
                         <span>Inline</span>
@@ -143,35 +152,74 @@
                         <div>
                             <div class="pane-title">Source</div>
                             <div class="pane-meta">
+                                <span class="stat-pill"><span id="wpmCount">0</span> WPM</span>
                                 <span><span id="characterCount">0</span> chars</span>
                                 <span><span id="wordCount">0</span> words</span>
                                 <span><span id="lineCount">0</span> lines</span>
+                                <span class="stat-pill session-stat" id="sessionStat" hidden><span id="sessionWords">0</span> this session</span>
                             </div>
                         </div>
                         <div class="pane-actions">
-                            <button class="btn small" id="copySourceBtn" type="button">
+                            <button class="btn small" id="focusModeBtn" type="button" title="Expand editor (hide preview)">
+                                <i data-lucide="maximize-2"></i>
+                                <span>Focus</span>
+                            </button>
+                            <button class="btn small" id="copySourceBtn" type="button" title="Copy source (Ctrl+C)">
                                 <i data-lucide="copy"></i>
                                 <span>Copy</span>
                             </button>
                         </div>
                     </div>
 
-                    <textarea id="sourceInput" spellcheck="false"
-                        placeholder="Write text with $inline math$, display equations, or small LaTeX blocks."></textarea>
+                    <textarea id="sourceInput" spellcheck="true"
+                        placeholder="Paste dictated text here, then revise and polish. Use $inline math$ or display equations when needed."></textarea>
 
                     <div class="pane-footer">
-                        <label class="toggle-control">
-                            <input id="livePreviewToggle" type="checkbox">
-                            <span>Live Preview</span>
-                        </label>
-                        <label class="select-control" for="editorSize">
-                            <span>Text Size</span>
-                            <select id="editorSize">
-                                <option value="small">Small</option>
-                                <option value="medium">Medium</option>
-                                <option value="large">Large</option>
-                            </select>
-                        </label>
+                        <div class="footer-controls">
+                            <label class="toggle-control">
+                                <input id="livePreviewToggle" type="checkbox">
+                                <span>Live Preview</span>
+                            </label>
+                            <label class="toggle-control">
+                                <input id="typingSoundToggle" type="checkbox" checked>
+                                <span>Keystroke Sound</span>
+                            </label>
+                            <label class="select-control select-control--sound" for="typingSoundStyle" id="typingSoundStyleWrap">
+                                <span>Sound</span>
+                                <select id="typingSoundStyle">
+                                    <option value="keystroke" selected>Keystroke</option>
+                                    <option value="typewriter">Typewriter</option>
+                                    <option value="soft">Soft click</option>
+                                    <option value="bubble">Bubble pop</option>
+                                    <option value="marble">Marble tap</option>
+                                    <option value="chime">Soft chime</option>
+                                    <option value="piano">Soft piano</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="footer-settings">
+                            <label class="select-control select-control--font" for="editorFont">
+                                <span>Font</span>
+                                <select id="editorFont">
+                                    <option value="literata">Literata — Book</option>
+                                    <option value="source-serif">Source Serif — Elegant</option>
+                                    <option value="inter">Inter — Clean</option>
+                                    <option value="nunito">Nunito — Soft</option>
+                                    <option value="caveat">Caveat — Handwriting</option>
+                                    <option value="jetbrains">JetBrains — Code</option>
+                                    <option value="plex">IBM Plex — Typewriter</option>
+                                </select>
+                            </label>
+                            <label class="select-control" for="editorSize">
+                                <span>Text Size</span>
+                                <select id="editorSize">
+                                    <option value="small">Small</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="large">Large</option>
+                                    <option value="xlarge">Extra Large</option>
+                                </select>
+                            </label>
+                        </div>
                     </div>
                 </section>
 
