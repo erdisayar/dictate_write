@@ -569,6 +569,31 @@ textarea:focus {
     background: color-mix(in srgb, var(--surface-soft) 50%, var(--input));
 }
 
+.stat-pill.keybinding-pill {
+    color: var(--muted);
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--surface-soft) 45%, var(--input));
+    letter-spacing: 0.04em;
+}
+
+.stat-pill.keybinding-pill[data-mode="emacs"] {
+    color: color-mix(in srgb, var(--text) 80%, var(--accent));
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+    background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface-soft));
+}
+
+.stat-pill.keybinding-pill[data-mode="vim"][data-vim-state="insert"] {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+    background: color-mix(in srgb, var(--accent-soft) 75%, var(--surface-soft));
+}
+
+.stat-pill.keybinding-pill[data-mode="vim"][data-vim-state="normal"] {
+    color: color-mix(in srgb, var(--warning) 88%, var(--text));
+    border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+    background: color-mix(in srgb, var(--warning-soft) 70%, var(--surface-soft));
+}
+
 .pane-actions {
     display: flex;
     align-items: center;

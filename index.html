@@ -157,6 +157,7 @@
                                 <span><span id="wordCount">0</span> words</span>
                                 <span><span id="lineCount">0</span> lines</span>
                                 <span class="stat-pill session-stat" id="sessionStat" hidden><span id="sessionWords">0</span> this session</span>
+                                <span class="stat-pill keybinding-pill" id="keybindingIndicator" aria-live="polite">Keys: Default</span>
                             </div>
                         </div>
                         <div class="pane-actions">
@@ -198,6 +199,14 @@
                             </label>
                         </div>
                         <div class="footer-settings">
+                            <label class="select-control" for="keybindingMode">
+                                <span>Keys</span>
+                                <select id="keybindingMode">
+                                    <option value="default">Default</option>
+                                    <option value="emacs">Emacs</option>
+                                    <option value="vim">Vim</option>
+                                </select>
+                            </label>
                             <label class="select-control select-control--font" for="editorFont">
                                 <span>Font</span>
                                 <select id="editorFont">

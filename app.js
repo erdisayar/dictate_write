@@ -50,6 +50,8 @@ let typingAudio = null;
 let typingMasterGain = null;
 let typingAudioUnlockHintShown = false;
 let lastKeystrokeSoundAt = 0;
+let vimMode = 'insert';
+let pendingVimOperator = '';
 
 const SESSION_MILESTONES = [50, 100, 250, 500, 1000];
 const PASTE_CHAR_THRESHOLD = 24;
@@ -65,6 +67,7 @@ function init() {
     refs.livePreviewToggle.checked = prefs.livePreview !== false;
     refs.editorSize.value = prefs.editorSize || document.documentElement.dataset.editorSize || 'large';
     refs.editorFont.value = prefs.editorFont || document.documentElement.dataset.editorFont || 'literata';
+    refs.keybindingMode.value = prefs.keybindingMode || 'default';
     refs.typingSoundToggle.checked = prefs.typingSound === undefined
         ? true
         : Boolean(prefs.typingSound);
@@ -75,6 +78,7 @@ function init() {
     setEditorFont(refs.editorFont.value, false);
     setFocusMode(prefs.focusMode === true, false);
     setTypingSoundUi();
+    updateKeybindingIndicator();
     bindEvents();
     refreshIcons();
     lastSourceValue = refs.sourceInput.value;
@@ -105,6 +109,7 @@ function bindRefs() {
         'wordCount',
         'lineCount',
         'wpmCount',
+        'keybindingIndicator',
         'sessionStat',
         'sessionWords',
         'focusModeBtn',
@@ -114,6 +119,7 @@ function bindRefs() {
         'typingSoundStyleWrap',
         'editorSize',
         'editorFont',
+        'keybindingMode',
         'mathCount',
         'savedStamp',
         'copyPreviewBtn',
@@ -162,6 +168,13 @@ function bindEvents() {
 
     refs.editorSize.addEventListener('change', () => setEditorSize(refs.editorSize.value));
     refs.editorFont.addEventListener('change', () => setEditorFont(refs.editorFont.value));
+    refs.keybindingMode.addEventListener('change', () => {
+        pendingVimOperator = '';
+        vimMode = 'insert';
+        updateKeybindingIndicator();
+        savePrefs();
+        toast(`Keybindings: ${refs.keybindingMode.options[refs.keybindingMode.selectedIndex].textContent}`);
+    });
     refs.focusModeBtn.addEventListener('click', () => setFocusMode(document.documentElement.dataset.focusMode !== 'on'));
     refs.typingSoundToggle.addEventListener('change', async () => {
         setTypingSoundUi();
@@ -226,6 +239,14 @@ function handleEditorKeydown(event) {
         void playTypingSound(event.key, event.repeat);
     }
 
+    if (handleWordShortcuts(event)) {
+        return;
+    }
+
+    if (handleModeKeydown(event)) {
+        return;
+    }
+
     if (event.key === 'Tab') {
         event.preventDefault();
         insertAtSelection('    ', '');
@@ -233,12 +254,18 @@ function handleEditorKeydown(event) {
     }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+        if (getKeybindingMode() !== 'default') {
+            return;
+        }
         event.preventDefault();
         insertSnippet('bold');
         return;
     }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'i') {
+        if (getKeybindingMode() !== 'default') {
+            return;
+        }
         event.preventDefault();
         insertSnippet('italic');
         return;
@@ -259,6 +286,505 @@ function handleEditorKeydown(event) {
             copyText(input.value, 'Source copied');
         }
     }
+}
+
+function getKeybindingMode() {
+    return refs.keybindingMode?.value || 'default';
+}
+
+function handleModeKeydown(event) {
+    const mode = getKeybindingMode();
+    if (mode === 'emacs') {
+        return handleEmacsKeydown(event);
+    }
+    if (mode === 'vim') {
+        return handleVimKeydown(event);
+    }
+    return false;
+}
+
+function handleWordShortcuts(event) {
+    if (!event.altKey || event.ctrlKey || event.metaKey) {
+        return false;
+    }
+
+    const key = event.key.toLowerCase();
+
+    if (key === 'b') {
+        event.preventDefault();
+        moveByWord(-1);
+        return true;
+    }
+
+    if (key === 'f') {
+        event.preventDefault();
+        moveByWord(1);
+        return true;
+    }
+
+    if (event.key === 'Backspace') {
+        event.preventDefault();
+        deletePreviousWord();
+        return true;
+    }
+
+    return false;
+}
+
+function handleEmacsKeydown(event) {
+    if (event.metaKey) {
+        return false;
+    }
+
+    if (!event.ctrlKey && !event.altKey) {
+        return false;
+    }
+
+    if (event.altKey && !event.ctrlKey) {
+        const key = event.key.toLowerCase();
+        if (key === 'd') {
+            event.preventDefault();
+            deleteNextWord();
+            return true;
+        }
+        return false;
+    }
+
+    if (!event.ctrlKey || event.altKey) {
+        return false;
+    }
+
+    const key = event.key.toLowerCase();
+    switch (key) {
+        case 'a':
+            event.preventDefault();
+            moveToLineStart();
+            return true;
+        case 'e':
+            event.preventDefault();
+            moveToLineEnd();
+            return true;
+        case 'b':
+            event.preventDefault();
+            moveByCharacter(-1);
+            return true;
+        case 'f':
+            event.preventDefault();
+            moveByCharacter(1);
+            return true;
+        case 'p':
+            event.preventDefault();
+            moveByLine(-1);
+            return true;
+        case 'n':
+            event.preventDefault();
+            moveByLine(1);
+            return true;
+        case 'd':
+            event.preventDefault();
+            deleteForwardCharacter();
+            return true;
+        case 'h':
+            event.preventDefault();
+            deleteBackwardCharacter();
+            return true;
+        case 'k':
+            event.preventDefault();
+            killToLineEnd();
+            return true;
+        case 'u':
+            event.preventDefault();
+            killToLineStart();
+            return true;
+        case 'w':
+            event.preventDefault();
+            deletePreviousWord();
+            return true;
+        default:
+            return false;
+    }
+}
+
+function handleVimKeydown(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+        return false;
+    }
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        pendingVimOperator = '';
+        vimMode = 'normal';
+        updateKeybindingIndicator();
+        return true;
+    }
+
+    if (vimMode === 'insert') {
+        return false;
+    }
+
+    const key = event.key;
+
+    if (key === 'd') {
+        event.preventDefault();
+        if (pendingVimOperator === 'd') {
+            deleteCurrentLine();
+            pendingVimOperator = '';
+        } else {
+            pendingVimOperator = 'd';
+        }
+        return true;
+    }
+
+    pendingVimOperator = '';
+
+    switch (key) {
+        case 'i':
+            event.preventDefault();
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'a':
+            event.preventDefault();
+            moveByCharacter(1);
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'I':
+            event.preventDefault();
+            moveToLineStart(true);
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'A':
+            event.preventDefault();
+            moveToLineEnd();
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'o':
+            event.preventDefault();
+            openLine(1);
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'O':
+            event.preventDefault();
+            openLine(-1);
+            vimMode = 'insert';
+            updateKeybindingIndicator();
+            return true;
+        case 'h':
+            event.preventDefault();
+            moveByCharacter(-1);
+            return true;
+        case 'l':
+            event.preventDefault();
+            moveByCharacter(1);
+            return true;
+        case 'j':
+            event.preventDefault();
+            moveByLine(1);
+            return true;
+        case 'k':
+            event.preventDefault();
+            moveByLine(-1);
+            return true;
+        case 'w':
+            event.preventDefault();
+            moveByWord(1);
+            return true;
+        case 'b':
+            event.preventDefault();
+            moveByWord(-1);
+            return true;
+        case 'e':
+            event.preventDefault();
+            moveToWordEnd();
+            return true;
+        case 'x':
+            event.preventDefault();
+            deleteForwardCharacter();
+            return true;
+        case '0':
+            event.preventDefault();
+            moveToLineStart();
+            return true;
+        case '$':
+            event.preventDefault();
+            moveToLineEnd();
+            return true;
+        default:
+            if (key.length === 1 || key === 'Backspace' || key === 'Delete' || key === 'Enter') {
+                event.preventDefault();
+                return true;
+            }
+            return false;
+    }
+}
+
+function getInputSelection() {
+    const input = refs.sourceInput;
+    return {
+        input,
+        text: input.value,
+        start: input.selectionStart,
+        end: input.selectionEnd
+    };
+}
+
+function setSelection(position) {
+    const input = refs.sourceInput;
+    const target = clamp(position, 0, input.value.length);
+    input.selectionStart = target;
+    input.selectionEnd = target;
+}
+
+function applyEditorEdit(nextValue, nextStart, nextEnd = nextStart) {
+    const input = refs.sourceInput;
+    input.value = nextValue;
+    input.selectionStart = clamp(nextStart, 0, nextValue.length);
+    input.selectionEnd = clamp(nextEnd, 0, nextValue.length);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function moveByCharacter(direction) {
+    const { text, start, end } = getInputSelection();
+    if (direction < 0 && start !== end) {
+        setSelection(start);
+        return;
+    }
+    if (direction > 0 && start !== end) {
+        setSelection(end);
+        return;
+    }
+    setSelection(clamp(start + direction, 0, text.length));
+}
+
+function moveByWord(direction) {
+    const { text, start, end } = getInputSelection();
+    const anchor = direction < 0 ? Math.min(start, end) : Math.max(start, end);
+    const target = direction < 0
+        ? findPreviousWordBoundary(text, anchor)
+        : findNextWordBoundary(text, anchor);
+    setSelection(target);
+}
+
+function moveToWordEnd() {
+    const { text, start, end } = getInputSelection();
+    let index = Math.max(start, end);
+
+    while (index < text.length && /\s/.test(text[index])) {
+        index += 1;
+    }
+    while (index < text.length && /\S/.test(text[index])) {
+        index += 1;
+    }
+
+    setSelection(Math.max(0, index - 1));
+}
+
+function findPreviousWordBoundary(text, from) {
+    let index = clamp(from, 0, text.length);
+
+    while (index > 0 && /\s/.test(text[index - 1])) {
+        index -= 1;
+    }
+    while (index > 0 && /\w/.test(text[index - 1])) {
+        index -= 1;
+    }
+    if (index === from) {
+        while (index > 0 && /\S/.test(text[index - 1])) {
+            index -= 1;
+        }
+    }
+
+    return index;
+}
+
+function findNextWordBoundary(text, from) {
+    let index = clamp(from, 0, text.length);
+
+    while (index < text.length && /\s/.test(text[index])) {
+        index += 1;
+    }
+    while (index < text.length && /\w/.test(text[index])) {
+        index += 1;
+    }
+    if (index === from) {
+        while (index < text.length && /\S/.test(text[index])) {
+            index += 1;
+        }
+    }
+
+    return index;
+}
+
+function moveToLineStart(nonWhitespace = false) {
+    const { text, start } = getInputSelection();
+    const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    if (!nonWhitespace) {
+        setSelection(lineStart);
+        return;
+    }
+
+    const lineEnd = text.indexOf('\n', start);
+    const safeEnd = lineEnd === -1 ? text.length : lineEnd;
+    const line = text.slice(lineStart, safeEnd);
+    const offset = line.search(/\S/);
+    setSelection(offset === -1 ? lineStart : lineStart + offset);
+}
+
+function moveToLineEnd() {
+    const { text, end } = getInputSelection();
+    const lineEnd = text.indexOf('\n', end);
+    setSelection(lineEnd === -1 ? text.length : lineEnd);
+}
+
+function moveByLine(direction) {
+    const { text, start, end } = getInputSelection();
+    const anchor = direction < 0 ? Math.min(start, end) : Math.max(start, end);
+    const lineStart = text.lastIndexOf('\n', Math.max(0, anchor - 1)) + 1;
+    const lineEndIndex = text.indexOf('\n', anchor);
+    const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
+    const column = anchor - lineStart;
+
+    if (direction < 0) {
+        if (lineStart === 0) {
+            setSelection(0);
+            return;
+        }
+
+        const previousLineEnd = lineStart - 1;
+        const previousLineStart = text.lastIndexOf('\n', Math.max(0, previousLineEnd - 1)) + 1;
+        const target = Math.min(previousLineStart + column, previousLineEnd);
+        setSelection(target);
+        return;
+    }
+
+    if (lineEnd === text.length) {
+        setSelection(text.length);
+        return;
+    }
+
+    const nextLineStart = lineEnd + 1;
+    const nextLineEndIndex = text.indexOf('\n', nextLineStart);
+    const nextLineEnd = nextLineEndIndex === -1 ? text.length : nextLineEndIndex;
+    const target = Math.min(nextLineStart + column, nextLineEnd);
+    setSelection(target);
+}
+
+function deleteBackwardCharacter() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    if (start === 0) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, start - 1)}${text.slice(start)}`, start - 1);
+}
+
+function deleteForwardCharacter() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    if (end >= text.length) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, start)}${text.slice(end + 1)}`, start);
+}
+
+function deletePreviousWord() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    const boundary = findPreviousWordBoundary(text, start);
+    if (boundary === start) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, boundary)}${text.slice(start)}`, boundary);
+}
+
+function deleteNextWord() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    const boundary = findNextWordBoundary(text, end);
+    if (boundary === end) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, start)}${text.slice(boundary)}`, start);
+}
+
+function killToLineStart() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    if (lineStart === start) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, lineStart)}${text.slice(start)}`, lineStart);
+}
+
+function killToLineEnd() {
+    const { text, start, end } = getInputSelection();
+    if (start !== end) {
+        applyEditorEdit(`${text.slice(0, start)}${text.slice(end)}`, start);
+        return;
+    }
+    const lineEnd = text.indexOf('\n', end);
+    const boundary = lineEnd === -1 ? text.length : lineEnd;
+    if (boundary === start) {
+        return;
+    }
+    applyEditorEdit(`${text.slice(0, start)}${text.slice(boundary)}`, start);
+}
+
+function deleteCurrentLine() {
+    const { text, start } = getInputSelection();
+    if (!text.length) {
+        return;
+    }
+
+    const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const lineBreak = text.indexOf('\n', lineStart);
+    let removeStart = lineStart;
+    let removeEnd = lineBreak === -1 ? text.length : lineBreak + 1;
+
+    if (lineBreak === -1 && lineStart > 0) {
+        removeStart = lineStart - 1;
+    }
+
+    const nextValue = `${text.slice(0, removeStart)}${text.slice(removeEnd)}`;
+    applyEditorEdit(nextValue, Math.min(removeStart, nextValue.length));
+}
+
+function openLine(direction) {
+    const { text, start } = getInputSelection();
+    if (!text.length) {
+        applyEditorEdit('\n', direction > 0 ? 1 : 0);
+        return;
+    }
+
+    if (direction < 0) {
+        const lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+        applyEditorEdit(`${text.slice(0, lineStart)}\n${text.slice(lineStart)}`, lineStart);
+        return;
+    }
+
+    const lineEnd = text.indexOf('\n', start);
+    const insertAt = lineEnd === -1 ? text.length : lineEnd + 1;
+    applyEditorEdit(`${text.slice(0, insertAt)}\n${text.slice(insertAt)}`, insertAt + 1);
 }
 
 function shouldPlayTypingSound(event) {
@@ -1433,10 +1959,8 @@ async function copyPng() {
         const canvas = await capturePreviewCanvas();
         const blob = await canvasToBlob(canvas, 'image/png');
 
-        if (navigator.clipboard && window.ClipboardItem) {
-            await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob })
-            ]);
+        const copied = await copyPngBlobToClipboard(blob);
+        if (copied) {
             setStatus('PNG copied', 'good');
             toast('PNG copied');
             return;
@@ -1444,12 +1968,34 @@ async function copyPng() {
 
         downloadBlob(blob, `${safeFileName(refs.noteTitle.value)}.png`, 'image/png');
         setStatus('PNG downloaded', 'good');
-        toast('PNG copy is not available here, so it was downloaded');
+        toast('Image clipboard is blocked in this browser, so PNG was downloaded');
     } catch (error) {
         void error;
         setStatus('PNG failed', 'warn');
         toast('Could not create the PNG');
     }
+}
+
+async function copyPngBlobToClipboard(blob) {
+    if (!window.isSecureContext || !navigator.clipboard || !navigator.clipboard.write || !window.ClipboardItem) {
+        return false;
+    }
+
+    const itemOptions = [
+        { 'image/png': blob },
+        { 'image/png': Promise.resolve(blob) }
+    ];
+
+    for (const option of itemOptions) {
+        try {
+            await navigator.clipboard.write([new ClipboardItem(option)]);
+            return true;
+        } catch (error) {
+            void error;
+        }
+    }
+
+    return false;
 }
 
 async function copySvg() {
@@ -1777,6 +2323,26 @@ function setTheme(theme, persist = true) {
     }
 }
 
+function updateKeybindingIndicator() {
+    if (!refs.keybindingIndicator) {
+        return;
+    }
+
+    const mode = getKeybindingMode();
+    let label = 'Keys: Default';
+
+    if (mode === 'emacs') {
+        label = 'Keys: Emacs';
+    } else if (mode === 'vim') {
+        const state = vimMode === 'normal' ? 'NORMAL' : 'INSERT';
+        label = `VIM: ${state}`;
+    }
+
+    refs.keybindingIndicator.textContent = label;
+    refs.keybindingIndicator.dataset.mode = mode;
+    refs.keybindingIndicator.dataset.vimState = mode === 'vim' ? vimMode : '';
+}
+
 function setEditorSize(size, persist = true) {
     document.documentElement.dataset.editorSize = size;
 
@@ -1805,6 +2371,7 @@ function savePrefs() {
         livePreview: refs.livePreviewToggle.checked,
         editorSize: refs.editorSize.value,
         editorFont: refs.editorFont.value,
+        keybindingMode: refs.keybindingMode.value,
         typingSound: refs.typingSoundToggle.checked,
         typingSoundStyle: refs.typingSoundStyle.value,
         focusMode: document.documentElement.dataset.focusMode === 'on'
