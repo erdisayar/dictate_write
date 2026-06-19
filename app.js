@@ -126,7 +126,28 @@ function bindRefs() {
         'previewOutput',
         'diagnostics',
         'fileInput',
-        'toastContainer'
+        'toastContainer',
+        'readAloudBtn',
+        'findPanel',
+        'findInput',
+        'replaceInput',
+        'findCaseSensitive',
+        'findWholeWord',
+        'findRegex',
+        'findCount',
+        'findPrevBtn',
+        'findNextBtn',
+        'replaceOneBtn',
+        'replaceAllBtn',
+        'findCloseBtn',
+        'matchHighlightLayer',
+        'synonymPopover',
+        'synonymWord',
+        'synonymBody',
+        'synonymCloseBtn',
+        'helpOverlay',
+        'helpCloseBtn',
+        'helpGrid'
     ].forEach(id => {
         refs[id] = document.getElementById(id);
     });
@@ -156,6 +177,11 @@ function bindEvents() {
     refs.clearBtn.addEventListener('click', clearNote);
     refs.copySourceBtn.addEventListener('click', () => copyText(refs.sourceInput.value, 'Source copied'));
     refs.copyPreviewBtn.addEventListener('click', copyPreviewText);
+    refs.readAloudBtn.addEventListener('click', toggleReadAloud);
+
+    bindFindPanel();
+    bindSynonymPopover();
+    bindHelpOverlay();
 
     refs.livePreviewToggle.addEventListener('change', () => {
         savePrefs();
@@ -207,6 +233,30 @@ function bindEvents() {
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
             event.preventDefault();
             renderNote();
+        }
+
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+            const key = event.key.toLowerCase();
+            if (key === 'f') {
+                event.preventDefault();
+                openFindPanel(false);
+                return;
+            }
+            if (key === 'h') {
+                event.preventDefault();
+                openFindPanel(true);
+                return;
+            }
+            if (key === 'r') {
+                event.preventDefault();
+                toggleReadAloud();
+                return;
+            }
+            if (key === '/') {
+                event.preventDefault();
+                toggleHelpOverlay();
+                return;
+            }
         }
     });
 }
@@ -2443,5 +2493,780 @@ function isEscaped(text, index) {
 function refreshIcons() {
     if (window.lucide && window.lucide.createIcons) {
         window.lucide.createIcons();
+    }
+}
+
+/* ============================================================
+   Find & Replace
+   ============================================================ */
+
+const findState = {
+    matches: [],
+    activeIndex: -1,
+    lastQuery: ''
+};
+
+function bindFindPanel() {
+    refs.findInput.addEventListener('input', updateFindMatches);
+    refs.replaceInput.addEventListener('input', updateReplaceState);
+    refs.findCaseSensitive.addEventListener('change', updateFindMatches);
+    refs.findWholeWord.addEventListener('change', updateFindMatches);
+    refs.findRegex.addEventListener('change', updateFindMatches);
+
+    refs.findNextBtn.addEventListener('click', () => stepFind(1));
+    refs.findPrevBtn.addEventListener('click', () => stepFind(-1));
+    refs.replaceOneBtn.addEventListener('click', replaceOne);
+    refs.replaceAllBtn.addEventListener('click', replaceAll);
+    refs.findCloseBtn.addEventListener('click', closeFindPanel);
+
+    refs.findPanel.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeFindPanel();
+            return;
+        }
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            stepFind(event.shiftKey ? -1 : 1);
+            return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
+            event.preventDefault();
+            stepFind(event.shiftKey ? -1 : 1);
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (!refs.findPanel.hidden) {
+            renderMatchHighlights();
+        }
+    });
+}
+
+function openFindPanel(focusReplace) {
+    refs.findPanel.hidden = false;
+    refreshIcons();
+    const selected = getSelectionText();
+    if (selected && !selected.includes('\n')) {
+        refs.findInput.value = selected;
+    }
+    updateFindMatches();
+    (focusReplace ? refs.replaceInput : refs.findInput).focus();
+    (focusReplace ? refs.replaceInput : refs.findInput).select();
+}
+
+function closeFindPanel() {
+    refs.findPanel.hidden = true;
+    findState.matches = [];
+    findState.activeIndex = -1;
+    findState.lastQuery = '';
+    renderMatchHighlights();
+    refs.sourceInput.focus();
+}
+
+function buildFindRegex() {
+    const query = refs.findInput.value;
+    if (!query) {
+        return null;
+    }
+
+    const flags = refs.findCaseSensitive.checked ? 'g' : 'gi';
+    let pattern;
+
+    if (refs.findRegex.checked) {
+        try {
+            pattern = query;
+        } catch (error) {
+            return null;
+        }
+    } else {
+        pattern = escapeRegex(query);
+        if (refs.findWholeWord.checked) {
+            pattern = `\\b${pattern}\\b`;
+        }
+    }
+
+    try {
+        return new RegExp(pattern, flags);
+    } catch (error) {
+        return null;
+    }
+}
+
+function updateFindMatches() {
+    const regex = buildFindRegex();
+    const text = refs.sourceInput.value;
+
+    if (!regex || !refs.findInput.value) {
+        findState.matches = [];
+        findState.activeIndex = -1;
+        findState.lastQuery = '';
+        refs.findCount.textContent = '0 / 0';
+        renderMatchHighlights();
+        return;
+    }
+
+    if (findState.lastQuery !== refs.findInput.value) {
+        findState.activeIndex = -1;
+        findState.lastQuery = refs.findInput.value;
+    }
+
+    findState.matches = [];
+    let match;
+    regex.lastIndex = 0;
+    while ((match = regex.exec(text)) !== null) {
+        findState.matches.push({ start: match.index, end: match.index + match[0].length, text: match[0] });
+        if (match.index === regex.lastIndex) {
+            regex.lastIndex += 1;
+        }
+    }
+
+    if (findState.activeIndex === -1 && findState.matches.length) {
+        findState.activeIndex = 0;
+    }
+    if (findState.activeIndex >= findState.matches.length) {
+        findState.activeIndex = findState.matches.length - 1;
+    }
+
+    refs.findCount.textContent = findState.matches.length
+        ? `${findState.activeIndex + 1} / ${findState.matches.length}`
+        : '0 / 0';
+
+    renderMatchHighlights();
+    if (findState.matches.length) {
+        scrollToActiveMatch();
+    }
+}
+
+function updateReplaceState() {
+    // placeholder for future state hooks
+}
+
+function stepFind(direction) {
+    if (!findState.matches.length) {
+        updateFindMatches();
+        return;
+    }
+    const total = findState.matches.length;
+    findState.activeIndex = (findState.activeIndex + direction + total) % total;
+    refs.findCount.textContent = `${findState.activeIndex + 1} / ${total}`;
+    renderMatchHighlights();
+    scrollToActiveMatch();
+    selectActiveMatch();
+}
+
+function selectActiveMatch() {
+    const match = findState.matches[findState.activeIndex];
+    if (!match) return;
+    refs.sourceInput.focus();
+    refs.sourceInput.setSelectionRange(match.start, match.end);
+}
+
+function scrollToActiveMatch() {
+    const match = findState.matches[findState.activeIndex];
+    if (!match) return;
+    const before = refs.sourceInput.value.slice(0, match.start);
+    const lineCount = before.split('\n').length;
+    refs.sourceInput.scrollTop = Math.max(0, (lineCount - 4) * getEditorLineHeight());
+}
+
+function replaceOne() {
+    if (!findState.matches.length) {
+        toast('No matches');
+        return;
+    }
+    const match = findState.matches[findState.activeIndex];
+    if (!match) return;
+    const replacement = refs.replaceInput.value;
+    const input = refs.sourceInput;
+    const value = input.value;
+    const next = `${value.slice(0, match.start)}${replacement}${value.slice(match.end)}`;
+    const delta = replacement.length - match.text.length;
+
+    input.value = next;
+    input.setSelectionRange(match.start, match.start + replacement.length);
+    lastSourceValue = input.value;
+    localStorage.setItem(STORAGE.source, input.value);
+    updateStats();
+    updateWritingMetrics();
+    markSaved();
+    if (refs.livePreviewToggle.checked) scheduleRender();
+
+    // Shift subsequent matches by delta, then re-scan to keep regex fresh.
+    for (let i = findState.activeIndex + 1; i < findState.matches.length; i += 1) {
+        findState.matches[i].start += delta;
+        findState.matches[i].end += delta;
+    }
+    updateFindMatches();
+    if (findState.matches.length) {
+        selectActiveMatch();
+        scrollToActiveMatch();
+    }
+}
+
+function replaceAll() {
+    if (!findState.matches.length) {
+        toast('No matches');
+        return;
+    }
+    const regex = buildFindRegex();
+    if (!regex) return;
+    const replacement = refs.replaceInput.value;
+    const input = refs.sourceInput;
+    const value = input.value;
+
+    let count = 0;
+    const next = value.replace(regex, () => {
+        count += 1;
+        return replacement;
+    });
+
+    if (count === 0) {
+        toast('No matches');
+        return;
+    }
+
+    input.value = next;
+    lastSourceValue = input.value;
+    localStorage.setItem(STORAGE.source, input.value);
+    updateStats();
+    updateWritingMetrics();
+    markSaved();
+    if (refs.livePreviewToggle.checked) scheduleRender();
+
+    updateFindMatches();
+    toast(`Replaced ${count} occurrence${count === 1 ? '' : 's'}`);
+}
+
+function renderMatchHighlights() {
+    const layer = refs.matchHighlightLayer;
+    layer.innerHTML = '';
+
+    if (!findState.matches.length || refs.findPanel.hidden) {
+        return;
+    }
+
+    const mirror = buildEditorMirror();
+    findState.matches.forEach((match, index) => {
+        const rect = mirror.rectForRange(match.start, match.end);
+        if (!rect) return;
+        const highlight = document.createElement('div');
+        highlight.className = 'match-highlight' + (index === findState.activeIndex ? ' active' : '');
+        highlight.style.left = `${rect.left}px`;
+        highlight.style.top = `${rect.top}px`;
+        highlight.style.width = `${rect.width}px`;
+        highlight.style.height = `${rect.height}px`;
+        layer.appendChild(highlight);
+    });
+}
+
+function buildEditorMirror() {
+    const textarea = refs.sourceInput;
+    const computed = window.getComputedStyle(textarea);
+    const props = [
+        'box-sizing', 'width', 'height', 'padding-top', 'padding-right',
+        'padding-bottom', 'padding-left', 'border-top-width', 'border-right-width',
+        'border-bottom-width', 'border-left-width', 'font-family', 'font-size',
+        'font-weight', 'line-height', 'letter-spacing', 'tab-size', 'white-space',
+        'word-wrap', 'word-break', 'text-wrap'
+    ];
+
+    const mirror = document.createElement('div');
+    mirror.style.position = 'absolute';
+    mirror.style.visibility = 'hidden';
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.wordWrap = 'break-word';
+    mirror.style.overflow = 'hidden';
+    mirror.style.top = '0';
+    mirror.style.left = '0';
+
+    props.forEach(prop => {
+        mirror.style.setProperty(prop, computed.getPropertyValue(prop));
+    });
+
+    mirror.textContent = textarea.value + '\u200b';
+    textarea.parentElement.appendChild(mirror);
+
+    const range = document.createRange();
+
+    function rectForRange(start, end) {
+        const textNode = mirror.firstChild;
+        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
+        const maxLen = textNode.nodeValue.length;
+        try {
+            range.setStart(textNode, Math.min(start, maxLen));
+            range.setEnd(textNode, Math.min(end, maxLen));
+            const rect = range.getBoundingClientRect();
+            const parentRect = mirror.getBoundingClientRect();
+            return {
+                left: rect.left - parentRect.left,
+                top: rect.top - parentRect.top + textarea.scrollTop,
+                width: rect.width,
+                height: rect.height
+            };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function dispose() {
+        mirror.remove();
+    }
+
+    return { rectForRange, dispose };
+}
+
+/* ============================================================
+   Read Aloud (text-to-speech)
+   ============================================================ */
+
+const ttsState = {
+    utterance: null,
+    active: false,
+    tokens: [],
+    tokenIndex: 0
+};
+
+function toggleReadAloud() {
+    if (ttsState.active) {
+        stopReadAloud();
+        return;
+    }
+    startReadAloud();
+}
+
+function startReadAloud() {
+    if (!('speechSynthesis' in window)) {
+        toast('Speech synthesis is not supported in this browser');
+        return;
+    }
+
+    const text = refs.sourceInput.value.trim();
+    if (!text) {
+        toast('Nothing to read');
+        return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(stripLatexForSpeech(text));
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find(voice => /en[-_]/i.test(voice.lang));
+    if (englishVoice) {
+        utterance.voice = englishVoice;
+    }
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    ttsState.tokens = tokenizeForHighlight(text);
+    ttsState.tokenIndex = 0;
+    ttsState.active = true;
+    ttsState.utterance = utterance;
+
+    utterance.onboundary = event => {
+        if (event.name !== 'word') return;
+        advanceTtsHighlight(event.charIndex);
+    };
+    utterance.onend = stopReadAloud;
+    utterance.onerror = stopReadAloud;
+
+    refs.readAloudBtn.setAttribute('aria-pressed', 'true');
+    refs.readAloudBtn.querySelector('span').textContent = 'Stop';
+    setStatus('Reading aloud', 'good');
+    highlightTtsToken(0);
+    window.speechSynthesis.speak(utterance);
+}
+
+function stopReadAloud() {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+    ttsState.active = false;
+    ttsState.utterance = null;
+    clearTtsHighlight();
+    refs.readAloudBtn.setAttribute('aria-pressed', 'false');
+    refs.readAloudBtn.querySelector('span').textContent = 'Read';
+    setStatus('Ready', '');
+}
+
+function stripLatexForSpeech(text) {
+    return text
+        .replace(/\\begin\{[^}]+\}/g, '')
+        .replace(/\\end\{[^}]+\}/g, '')
+        .replace(/\\item\s*/g, '')
+        .replace(/\\(textbf|textit|emph|underline|texttt)\{([^{}]*)\}/g, '$2')
+        .replace(/\\(section|subsection|subsubsection|paragraph)\*?\{([^{}]*)\}/g, '$2. ')
+        .replace(/\\(cite|ref|label)\{[^{}]*\}/g, '')
+        .replace(/\\(LaTeX|TeX|quad|,|newline)/g, ' ')
+        .replace(/\\\\/g, '. ')
+        .replace(/\$[^$]*\$/g, ' math expression ')
+        .replace(/\$\$[\s\S]*?\$\$/g, ' display math ')
+        .replace(/\\\[[\s\S]*?\\\]/g, ' display math ')
+        .replace(/\\\([\s\S]*?\\\)/g, ' math expression ')
+        .replace(/\\[a-zA-Z]+/g, ' ')
+        .replace(/[{}]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function tokenizeForHighlight(text) {
+    const cleaned = text
+        .replace(/\\begin\{[^}]+\}/g, ' ')
+        .replace(/\\end\{[^}]+\}/g, ' ')
+        .replace(/\\item\s*/g, ' ')
+        .replace(/\\(textbf|textit|emph|underline|texttt)\{([^{}]*)\}/g, '$2')
+        .replace(/\\(section|subsection|subsubsection|paragraph)\*?\{([^{}]*)\}/g, '$2')
+        .replace(/\\(cite|ref|label)\{[^{}]*\}/g, ' ')
+        .replace(/\$[^$]*\$/g, ' math ')
+        .replace(/\$\$[\s\S]*?\$\$/g, ' math ')
+        .replace(/\\\[[\s\S]*?\\\]/g, ' math ')
+        .replace(/\\\([\s\S]*?\\\)/g, ' math ');
+
+    const tokens = [];
+    const regex = /\S+/g;
+    let match;
+    while ((match = regex.exec(cleaned)) !== null) {
+        tokens.push({ start: match.index, end: match.index + match[0].length, text: match[0] });
+    }
+    return tokens;
+}
+
+function advanceTtsHighlight(charIndex) {
+    let target = 0;
+    for (let i = 0; i < ttsState.tokens.length; i += 1) {
+        if (ttsState.tokens[i].start >= charIndex) {
+            target = i;
+            break;
+        }
+        target = i;
+    }
+    highlightTtsToken(target);
+}
+
+function highlightTtsToken(index) {
+    ttsState.tokenIndex = index;
+    clearTtsHighlight();
+    const token = ttsState.tokens[index];
+    if (!token) return;
+
+    const preview = refs.previewOutput;
+    const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT, null);
+    let node;
+    let consumed = 0;
+    while ((node = walker.nextNode())) {
+        const len = node.nodeValue.length;
+        if (consumed + len >= token.start) {
+            const localStart = Math.max(0, token.start - consumed);
+            const localEnd = Math.min(len, token.end - consumed);
+            const span = document.createElement('span');
+            span.className = 'tts-word active';
+            const range = document.createRange();
+            range.setStart(node, localStart);
+            range.setEnd(node, localEnd);
+            range.surroundContents(span);
+            span.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+        }
+        consumed += len;
+    }
+}
+
+function clearTtsHighlight() {
+    const preview = refs.previewOutput;
+    preview.querySelectorAll('.tts-word').forEach(span => {
+        const parent = span.parentNode;
+        while (span.firstChild) {
+            parent.insertBefore(span.firstChild, span);
+        }
+        parent.normalize();
+        span.remove();
+    });
+}
+
+/* ============================================================
+   Synonym lookup (Datamuse API)
+   ============================================================ */
+
+let synonymAbort = null;
+
+function bindSynonymPopover() {
+    refs.synonymCloseBtn.addEventListener('click', closeSynonymPopover);
+    refs.sourceInput.addEventListener('dblclick', event => {
+        const word = getWordAtCaret();
+        if (word) {
+            openSynonymPopover(word, event);
+        }
+    });
+    document.addEventListener('click', event => {
+        if (refs.synonymPopover.hidden) return;
+        if (refs.synonymPopover.contains(event.target)) return;
+        if (event.target === refs.sourceInput) return;
+        closeSynonymPopover();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !refs.synonymPopover.hidden) {
+            closeSynonymPopover();
+        }
+    });
+}
+
+function getWordAtCaret() {
+    const input = refs.sourceInput;
+    const value = input.value;
+    const pos = input.selectionStart;
+    if (pos !== input.selectionEnd) {
+        const selected = value.slice(input.selectionStart, input.selectionEnd);
+        if (/^[A-Za-z][A-Za-z'-]*$/.test(selected)) return selected;
+    }
+    let start = pos;
+    let end = pos;
+    while (start > 0 && /[A-Za-z'-]/.test(value[start - 1])) start -= 1;
+    while (end < value.length && /[A-Za-z'-]/.test(value[end])) end += 1;
+    const word = value.slice(start, end);
+    return /^[A-Za-z][A-Za-z'-]*$/.test(word) ? word : '';
+}
+
+async function openSynonymPopover(word, event) {
+    refs.synonymPopover.hidden = false;
+    refs.synonymWord.textContent = word.toLowerCase();
+    refs.synonymBody.innerHTML = '<span class="synonym-empty">Loading synonyms…</span>';
+    positionSynonymPopover(event);
+
+    if (synonymAbort) {
+        synonymAbort.abort();
+    }
+    const controller = new AbortController();
+    synonymAbort = controller;
+
+    try {
+        const response = await fetch(
+            `https://api.datamuse.com/words?rel_syn=${encodeURIComponent(word)}&ml=${encodeURIComponent(word)}&max=24`,
+            { signal: controller.signal }
+        );
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+        renderSynonyms(word, data);
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+        refs.synonymBody.innerHTML = '<span class="synonym-empty">Could not fetch synonyms. Check your connection.</span>';
+    }
+}
+
+function renderSynonyms(word, data) {
+    const synonyms = data.filter(item => item.tags && item.tags.includes('syn')).slice(0, 12);
+    const similar = data.filter(item => !item.tags || !item.tags.includes('syn')).slice(0, 12);
+
+    const body = refs.synonymBody;
+    body.innerHTML = '';
+
+    if (!synonyms.length && !similar.length) {
+        body.innerHTML = '<span class="synonym-empty">No synonyms found.</span>';
+        return;
+    }
+
+    if (synonyms.length) {
+        const group = document.createElement('div');
+        group.className = 'synonym-group';
+        group.innerHTML = '<span class="synonym-group-label">Synonyms</span>';
+        const chips = document.createElement('div');
+        synonyms.forEach(item => {
+            chips.appendChild(createSynonymChip(item.word));
+        });
+        group.appendChild(chips);
+        body.appendChild(group);
+    }
+
+    if (similar.length) {
+        const group = document.createElement('div');
+        group.className = 'synonym-group';
+        group.innerHTML = '<span class="synonym-group-label">Related words</span>';
+        const chips = document.createElement('div');
+        similar.forEach(item => {
+            chips.appendChild(createSynonymChip(item.word));
+        });
+        group.appendChild(chips);
+        body.appendChild(group);
+    }
+}
+
+function createSynonymChip(word) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'synonym-chip';
+    chip.textContent = word;
+    chip.addEventListener('click', () => {
+        replaceWordAtCaret(word);
+        closeSynonymPopover();
+        toast(`Replaced with "${word}"`);
+    });
+    return chip;
+}
+
+function replaceWordAtCaret(replacement) {
+    const input = refs.sourceInput;
+    const value = input.value;
+    const pos = input.selectionStart;
+    let start = pos;
+    let end = pos;
+    while (start > 0 && /[A-Za-z'-]/.test(value[start - 1])) start -= 1;
+    while (end < value.length && /[A-Za-z'-]/.test(value[end])) end += 1;
+    if (start === end) return;
+
+    const next = `${value.slice(0, start)}${replacement}${value.slice(end)}`;
+    input.value = next;
+    input.setSelectionRange(start, start + replacement.length);
+    lastSourceValue = input.value;
+    localStorage.setItem(STORAGE.source, input.value);
+    updateStats();
+    updateWritingMetrics();
+    markSaved();
+    if (refs.livePreviewToggle.checked) scheduleRender();
+    input.focus();
+}
+
+function positionSynonymPopover(event) {
+    const popover = refs.synonymPopover;
+    const rect = refs.sourceInput.getBoundingClientRect();
+    let x = event ? event.clientX : rect.left + 40;
+    let y = event ? event.clientY : rect.top + 40;
+
+    popover.style.left = '0px';
+    popover.style.top = '0px';
+    const popRect = popover.getBoundingClientRect();
+    const margin = 12;
+
+    if (x + popRect.width + margin > window.innerWidth) {
+        x = window.innerWidth - popRect.width - margin;
+    }
+    if (y + popRect.height + margin > window.innerHeight) {
+        y = window.innerHeight - popRect.height - margin;
+    }
+    x = Math.max(margin, x);
+    y = Math.max(margin, y);
+
+    popover.style.left = `${x}px`;
+    popover.style.top = `${y}px`;
+}
+
+function closeSynonymPopover() {
+    refs.synonymPopover.hidden = true;
+    if (synonymAbort) {
+        synonymAbort.abort();
+        synonymAbort = null;
+    }
+}
+
+/* ============================================================
+   Shortcuts help overlay
+   ============================================================ */
+
+const SHORTCUT_GROUPS = [
+    {
+        title: 'Core',
+        items: [
+            { keys: ['Ctrl', 'Enter'], label: 'Render note' },
+            { keys: ['Ctrl', 'S'], label: 'Save (auto-saved anyway)' },
+            { keys: ['Ctrl', 'E'], label: 'Toggle focus mode' },
+            { keys: ['Ctrl', '/'], label: 'Show this help' }
+        ]
+    },
+    {
+        title: 'Find & Replace',
+        items: [
+            { keys: ['Ctrl', 'F'], label: 'Open find' },
+            { keys: ['Ctrl', 'H'], label: 'Open replace' },
+            { keys: ['Enter'], label: 'Next match' },
+            { keys: ['Shift', 'Enter'], label: 'Previous match' },
+            { keys: ['Esc'], label: 'Close panel' }
+        ]
+    },
+    {
+        title: 'Read & Vocabulary',
+        items: [
+            { keys: ['Ctrl', 'R'], label: 'Read aloud / stop' },
+            { keys: ['Double-click'], label: 'Look up synonyms' }
+        ]
+    },
+    {
+        title: 'Snippets',
+        items: [
+            { keys: ['Ctrl', 'B'], label: 'Bold (\\textbf)' },
+            { keys: ['Ctrl', 'I'], label: 'Italic (\\textit)' },
+            { keys: ['Tab'], label: 'Indent' }
+        ]
+    },
+    {
+        title: 'Word motion (Alt)',
+        items: [
+            { keys: ['Alt', 'B'], label: 'Back one word' },
+            { keys: ['Alt', 'F'], label: 'Forward one word' },
+            { keys: ['Alt', '⌫'], label: 'Delete previous word' }
+        ]
+    },
+    {
+        title: 'Modes',
+        items: [
+            { keys: ['Esc'], label: 'Vim normal mode' },
+            { keys: ['i'], label: 'Vim insert mode' },
+            { keys: ['Ctrl', 'A'], label: 'Emacs line start' },
+            { keys: ['Ctrl', 'E'], label: 'Emacs line end' }
+        ]
+    }
+];
+
+function bindHelpOverlay() {
+    refs.helpCloseBtn.addEventListener('click', toggleHelpOverlay);
+    refs.helpOverlay.addEventListener('click', event => {
+        if (event.target === refs.helpOverlay) {
+            toggleHelpOverlay();
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !refs.helpOverlay.hidden) {
+            toggleHelpOverlay();
+        }
+    });
+    renderHelpGrid();
+}
+
+function renderHelpGrid() {
+    refs.helpGrid.innerHTML = '';
+    SHORTCUT_GROUPS.forEach(group => {
+        const section = document.createElement('div');
+        section.className = 'help-section';
+        const heading = document.createElement('h3');
+        heading.textContent = group.title;
+        const list = document.createElement('ul');
+        group.items.forEach(item => {
+            const li = document.createElement('li');
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            const keys = document.createElement('span');
+            keys.className = 'kbd-group';
+            item.keys.forEach((key, i) => {
+                if (i > 0) {
+                    keys.appendChild(document.createTextNode(' '));
+                }
+                const kbd = document.createElement('span');
+                kbd.className = 'kbd';
+                kbd.textContent = key;
+                keys.appendChild(kbd);
+            });
+            li.append(label, keys);
+            list.appendChild(li);
+        });
+        section.append(heading, list);
+        refs.helpGrid.appendChild(section);
+    });
+}
+
+function toggleHelpOverlay() {
+    const isOpening = refs.helpOverlay.hidden;
+    refs.helpOverlay.hidden = !isOpening;
+    if (isOpening) {
+        refreshIcons();
+        refs.helpCloseBtn.focus();
+    } else {
+        refs.sourceInput.focus();
     }
 }

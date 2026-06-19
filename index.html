@@ -111,6 +111,10 @@
                         <i data-lucide="panel-top"></i>
                         <span>Copy SVG</span>
                     </button>
+                    <button class="btn" id="readAloudBtn" type="button" title="Read the note aloud (Ctrl+R)">
+                        <i data-lucide="volume-2"></i>
+                        <span>Read</span>
+                    </button>
                     <button class="btn danger" id="clearBtn" type="button">
                         <i data-lucide="trash-2"></i>
                         <span>Clear</span>
@@ -172,8 +176,11 @@
                         </div>
                     </div>
 
-                    <textarea id="sourceInput" spellcheck="true"
-                        placeholder="Paste dictated text here, then revise and polish. Use $inline math$ or display equations when needed."></textarea>
+                    <div class="editor-wrap">
+                        <div class="match-highlight-layer" id="matchHighlightLayer" aria-hidden="true"></div>
+                        <textarea id="sourceInput" spellcheck="true"
+                            placeholder="Paste dictated text here, then revise and polish. Use $inline math$ or display equations when needed."></textarea>
+                    </div>
 
                     <div class="pane-footer">
                         <div class="footer-controls">
@@ -258,6 +265,75 @@
 
     <input class="hidden-input" id="fileInput" type="file" accept=".tex,.txt,.md,text/*">
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Find & Replace panel -->
+    <div class="find-panel" id="findPanel" hidden>
+        <div class="find-row">
+            <div class="find-field">
+                <i data-lucide="search"></i>
+                <input id="findInput" type="text" placeholder="Find" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="find-field">
+                <i data-lucide="replace"></i>
+                <input id="replaceInput" type="text" placeholder="Replace" autocomplete="off" spellcheck="false">
+            </div>
+            <label class="find-option">
+                <input id="findCaseSensitive" type="checkbox">
+                <span>Aa</span>
+            </label>
+            <label class="find-option">
+                <input id="findWholeWord" type="checkbox">
+                <span>W</span>
+            </label>
+            <label class="find-option">
+                <input id="findRegex" type="checkbox">
+                <span>.*</span>
+            </label>
+        </div>
+        <div class="find-actions">
+            <span class="find-count" id="findCount">0 / 0</span>
+            <button class="btn small" id="findPrevBtn" type="button" title="Previous (Shift+Enter)">
+                <i data-lucide="chevron-up"></i>
+            </button>
+            <button class="btn small" id="findNextBtn" type="button" title="Next (Enter)">
+                <i data-lucide="chevron-down"></i>
+            </button>
+            <button class="btn small" id="replaceOneBtn" type="button">
+                <span>Replace</span>
+            </button>
+            <button class="btn small" id="replaceAllBtn" type="button">
+                <span>All</span>
+            </button>
+            <button class="btn small ghost" id="findCloseBtn" type="button" title="Close (Esc)">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Synonym popover -->
+    <div class="synonym-popover" id="synonymPopover" hidden>
+        <div class="synonym-header">
+            <span id="synonymWord">word</span>
+            <button class="btn small ghost" id="synonymCloseBtn" type="button" title="Close">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="synonym-body" id="synonymBody">Loading…</div>
+    </div>
+
+    <!-- Shortcuts help overlay -->
+    <div class="help-overlay" id="helpOverlay" hidden>
+        <div class="help-card">
+            <div class="help-head">
+                <h2>Keyboard Shortcuts</h2>
+                <button class="btn small ghost" id="helpCloseBtn" type="button" title="Close (Esc)">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="help-grid" id="helpGrid"></div>
+            <p class="help-hint">Tip: double-click any word in the editor to look up synonyms.</p>
+        </div>
+    </div>
 </body>
 
 </html>
