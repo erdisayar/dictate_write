@@ -1989,6 +1989,29 @@ textarea::-webkit-scrollbar-thumb:hover,
     color: var(--subtle);
 }
 
+.command-item-badge {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+
+.command-item-badge.active-badge {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.command-item.is-tab .command-item-title {
+    font-weight: 600;
+}
+
 /* ── Settings Modal ── */
 
 .settings-modal-body {

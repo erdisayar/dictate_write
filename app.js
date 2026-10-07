@@ -565,6 +565,10 @@ function switchTab(tabId) {
     if (tabId === activeTabId) return;
     saveTabs();
     activateTab(tabId, true);
+    const target = tabs.find(t => t.id === tabId);
+    if (target) {
+        toast(`Switched to topic: ${target.title || 'Untitled Topic'}`);
+    }
 }
 
 function activateTab(tabId, animate = true) {
@@ -2196,63 +2200,145 @@ function closeCommandPalette() {
 }
 
 function buildCommandPaletteItems() {
-    commandPaletteItems = [
-        { icon: 'plus', title: 'New Topic Tab', desc: 'Open a blank tab for another topic', shortcut: 'Alt+N', action: () => createTab() },
-        { icon: 'x', title: 'Close Current Tab', desc: 'Close this topic tab', shortcut: 'Ctrl+Alt+W', action: () => closeTab(activeTabId) },
-        { icon: 'copy', title: 'Duplicate Tab', desc: 'Duplicate current topic and equations', shortcut: '', action: duplicateCurrentTab },
-        { icon: 'binary', title: 'Open LaTeX Symbol Palette', desc: 'Search and insert Greek, math, and matrix symbols', shortcut: 'Ctrl+/', action: openSymbolModal },
-        { icon: 'maximize-2', title: 'Toggle Focus Mode', desc: 'Distraction-free full-width writing', shortcut: 'Ctrl+E', action: () => setFocusMode(document.documentElement.dataset.focusMode !== 'on') },
-        { icon: 'refresh-cw', title: 'Render Note Preview', desc: 'Re-render KaTeX math and layout', shortcut: 'Ctrl+Enter', action: renderNote },
-        { icon: 'file-text', title: 'Download PDF', desc: 'Export printable or downloadable PDF', shortcut: '', action: downloadPdf },
-        { icon: 'download', title: 'Download .tex Source', desc: 'Save raw LaTeX document file', shortcut: '', action: downloadTex },
-        { icon: 'image', title: 'Copy Rendered PNG', desc: 'Copy note image to clipboard', shortcut: '', action: copyPng },
-        { icon: 'panel-top', title: 'Copy Rendered SVG', desc: 'Copy vector SVG image to clipboard', shortcut: '', action: copySvg },
-        { icon: 'archive', title: 'Backup All Tabs (JSON)', desc: 'Export all open topic tabs into a JSON file', shortcut: '', action: exportTabsBackup },
-        { icon: 'help-circle', title: 'Keyboard Shortcuts Guide', desc: 'View all keyboard shortcuts and commands', shortcut: '?', action: openShortcutsModal }
-    ];
+    commandPaletteItems = [];
 
-    // Add direct tab-switching commands
+    // 1. All topic tabs listed first with badge and topic index
     tabs.forEach((tab, idx) => {
-        if (tab.id !== activeTabId) {
-            commandPaletteItems.push({
-                icon: 'file-text',
-                title: `Switch to: ${tab.title || 'Untitled Topic'}`,
-                desc: `Tab ${idx + 1} • Jump directly to this topic`,
-                shortcut: '',
-                action: () => switchTab(tab.id)
-            });
-        }
+        const isActive = tab.id === activeTabId;
+        const tabNumber = idx + 1;
+        const tabTitle = tab.title || 'Untitled Topic';
+
+        commandPaletteItems.push({
+            type: 'tab',
+            tabId: tab.id,
+            icon: 'file-text',
+            title: tabTitle,
+            desc: isActive
+                ? `Tab ${tabNumber} • Currently active`
+                : `Tab ${tabNumber} • Press Enter to jump to this topic`,
+            badge: isActive ? 'Active' : `Tab ${tabNumber}`,
+            isActiveTab: isActive,
+            content: tab.content || '',
+            action: () => switchTab(tab.id)
+        });
     });
+
+    // 2. Tab management actions
+    commandPaletteItems.push(
+        { type: 'action', icon: 'plus', title: 'New Topic Tab', desc: 'Create and open a new blank topic tab', shortcut: 'Alt+N', action: () => createTab() },
+        { type: 'action', icon: 'copy', title: 'Duplicate Current Tab', desc: 'Duplicate current topic and equations into a new tab', shortcut: '', action: duplicateCurrentTab },
+        { type: 'action', icon: 'x', title: 'Close Current Tab', desc: 'Close this topic tab', shortcut: 'Ctrl+Alt+W', action: () => closeTab(activeTabId) },
+        { type: 'action', icon: 'archive', title: 'Backup All Tabs (JSON)', desc: 'Export all open topic tabs into a JSON file', shortcut: '', action: exportTabsBackup },
+        { type: 'action', icon: 'upload', title: 'Import Tabs Backup', desc: 'Load tabs from a JSON backup file', shortcut: '', action: () => refs.backupFileInput.click() }
+    );
+
+    // 3. LaTeX Tools & Studio Commands
+    commandPaletteItems.push(
+        { type: 'action', icon: 'binary', title: 'Open LaTeX Symbol Palette', desc: 'Search and insert Greek, math, and matrix symbols', shortcut: 'Ctrl+/', action: openSymbolModal },
+        { type: 'action', icon: 'maximize-2', title: 'Toggle Focus Mode', desc: 'Distraction-free full-width writing', shortcut: 'Ctrl+E', action: () => setFocusMode(document.documentElement.dataset.focusMode !== 'on') },
+        { type: 'action', icon: 'refresh-cw', title: 'Render Note Preview', desc: 'Re-render KaTeX math and layout', shortcut: 'Ctrl+Enter', action: renderNote },
+        { type: 'action', icon: 'file-text', title: 'Download PDF', desc: 'Export printable or downloadable PDF', shortcut: '', action: downloadPdf },
+        { type: 'action', icon: 'download', title: 'Download .tex Source', desc: 'Save raw LaTeX document file', shortcut: '', action: downloadTex },
+        { type: 'action', icon: 'image', title: 'Copy Rendered PNG', desc: 'Copy note image to clipboard', shortcut: '', action: copyPng },
+        { type: 'action', icon: 'panel-top', title: 'Copy Rendered SVG', desc: 'Copy vector SVG image to clipboard', shortcut: '', action: copySvg },
+        { type: 'action', icon: 'help-circle', title: 'Keyboard Shortcuts Guide', desc: 'View all keyboard shortcuts and commands', shortcut: '?', action: openShortcutsModal }
+    );
 }
 
 function renderCommandPaletteItems(query = '') {
     const q = query.toLowerCase().trim();
-    const matches = q
-        ? commandPaletteItems.filter(item => item.title.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q))
-        : commandPaletteItems;
+
+    let matches = [];
+    if (!q) {
+        matches = commandPaletteItems;
+    } else {
+        const tabExactOrPrefix = [];
+        const tabTitleContains = [];
+        const actionPrefix = [];
+        const actionContains = [];
+        const tabContentContains = [];
+        const descMatches = [];
+
+        commandPaletteItems.forEach(item => {
+            const titleLower = item.title.toLowerCase();
+            const descLower = item.desc.toLowerCase();
+            const contentLower = (item.content || '').toLowerCase();
+
+            if (item.type === 'tab') {
+                if (titleLower === q || titleLower.startsWith(q)) {
+                    tabExactOrPrefix.push(item);
+                } else if (titleLower.includes(q)) {
+                    tabTitleContains.push(item);
+                } else if (contentLower.includes(q)) {
+                    const matchIndex = contentLower.indexOf(q);
+                    const snippetStart = Math.max(0, matchIndex - 20);
+                    const snippetEnd = Math.min(contentLower.length, matchIndex + q.length + 30);
+                    const snippet = item.content.slice(snippetStart, snippetEnd).replace(/\r?\n+/g, ' ');
+                    tabContentContains.push({
+                        ...item,
+                        desc: `${item.badge} • Content: "…${snippet}…"`
+                    });
+                } else if (descLower.includes(q)) {
+                    descMatches.push(item);
+                }
+            } else {
+                if (titleLower.startsWith(q)) {
+                    actionPrefix.push(item);
+                } else if (titleLower.includes(q)) {
+                    actionContains.push(item);
+                } else if (descLower.includes(q)) {
+                    descMatches.push(item);
+                }
+            }
+        });
+
+        matches = [
+            ...tabExactOrPrefix,
+            ...tabTitleContains,
+            ...actionPrefix,
+            ...actionContains,
+            ...tabContentContains,
+            ...descMatches
+        ];
+    }
 
     refs.commandList.innerHTML = '';
-    commandPaletteActiveIndex = Math.min(commandPaletteActiveIndex, Math.max(0, matches.length - 1));
+    commandPaletteActiveIndex = 0;
 
     if (matches.length === 0) {
-        refs.commandList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--subtle);font-size:0.85rem;">No matching commands</div>`;
+        refs.commandList.innerHTML = `<div style="padding:24px 16px;text-align:center;color:var(--subtle);font-size:0.85rem;">No matching topics or commands for "<strong>${escapeHtml(query)}</strong>"</div>`;
         return;
     }
 
     matches.forEach((item, index) => {
         const div = document.createElement('div');
-        div.className = `command-item ${index === commandPaletteActiveIndex ? 'active' : ''}`;
+        div.className = `command-item ${item.type === 'tab' ? 'is-tab' : ''} ${index === 0 ? 'active' : ''}`;
         div.setAttribute('role', 'option');
+
+        let rightContent = '';
+        if (item.badge) {
+            const badgeClass = item.isActiveTab ? 'command-item-badge active-badge' : 'command-item-badge';
+            rightContent = `<span class="${badgeClass}">${escapeHtml(item.badge)}</span>`;
+        } else if (item.shortcut) {
+            rightContent = `<kbd>${escapeHtml(item.shortcut)}</kbd>`;
+        }
+
+        let iconHtml = '';
+        if (item.type === 'tab') {
+            iconHtml = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--accent);flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`;
+        } else {
+            iconHtml = `<i data-lucide="${item.icon}"></i>`;
+        }
 
         div.innerHTML = `
             <div class="command-item-left">
-                <i data-lucide="${item.icon}"></i>
+                ${iconHtml}
                 <div>
                     <div class="command-item-title">${escapeHtml(item.title)}</div>
                     <div class="command-item-desc">${escapeHtml(item.desc)}</div>
                 </div>
             </div>
-            ${item.shortcut ? `<kbd>${escapeHtml(item.shortcut)}</kbd>` : ''}
+            ${rightContent}
         `;
 
         div.addEventListener('click', () => {
