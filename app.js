@@ -201,7 +201,7 @@ function init() {
     // Load multi-document tabs
     loadTabs();
 
-    refs.sourceInput.focus();
+    refs.sourceInput.focus({ preventScroll: true });
 }
 
 function bindRefs() {
@@ -412,8 +412,8 @@ function handleGlobalKeydown(event) {
         return;
     }
 
-    // Ctrl+Alt+T or Ctrl+Alt+N: New Topic Tab
-    if (isCtrlOrMeta && event.altKey && (event.key.toLowerCase() === 't' || event.key.toLowerCase() === 'n')) {
+    // Alt+N or Ctrl+Alt+N: New Topic Tab
+    if ((event.altKey && event.key.toLowerCase() === 'n') || (isCtrlOrMeta && event.altKey && event.key.toLowerCase() === 't')) {
         event.preventDefault();
         createTab();
         return;
@@ -463,44 +463,73 @@ function loadTabs() {
             const found = tabs.find(t => t.id === targetId);
             activeTabId = found ? found.id : tabs[0].id;
         } else {
-            // Seed two initial tabs for a rich out-of-the-box multi-topic experience
-            tabs = [
-                {
-                    id: 'tab_' + Date.now().toString(36) + '_1',
-                    title: 'Short derivation',
-                    content: SAMPLE_NOTE,
-                    updatedAt: Date.now()
-                },
-                {
-                    id: 'tab_' + Date.now().toString(36) + '_2',
-                    title: 'Dictated Scratchpad',
-                    content: SAMPLE_SCRATCHPAD,
-                    updatedAt: Date.now()
-                }
-            ];
+            // Check for previous note from single-document version to preserve work
+            const oldSource = localStorage.getItem('temporary_latex_note_source');
+            const oldTitle = localStorage.getItem('temporary_latex_note_title');
+
+            if (oldSource !== null && oldSource.trim().length > 0) {
+                tabs = [
+                    {
+                        id: 'tab_' + Date.now().toString(36) + '_1',
+                        title: (oldTitle && oldTitle.trim()) || 'Derivation Note',
+                        content: oldSource,
+                        updatedAt: Date.now()
+                    },
+                    {
+                        id: 'tab_' + Date.now().toString(36) + '_2',
+                        title: 'Dictated Scratchpad',
+                        content: SAMPLE_SCRATCHPAD,
+                        updatedAt: Date.now()
+                    }
+                ];
+            } else {
+                tabs = [
+                    {
+                        id: 'tab_' + Date.now().toString(36) + '_1',
+                        title: 'Short derivation',
+                        content: SAMPLE_NOTE,
+                        updatedAt: Date.now()
+                    },
+                    {
+                        id: 'tab_' + Date.now().toString(36) + '_2',
+                        title: 'Dictated Scratchpad',
+                        content: SAMPLE_SCRATCHPAD,
+                        updatedAt: Date.now()
+                    }
+                ];
+            }
             activeTabId = tabs[0].id;
-            saveTabs();
+            persistTabsStorage();
         }
     } catch (err) {
         tabs = [
             { id: 'tab_default', title: 'Derivation Note', content: SAMPLE_NOTE, updatedAt: Date.now() }
         ];
         activeTabId = tabs[0].id;
+        persistTabsStorage();
     }
 
     renderTabsList();
     activateTab(activeTabId, false);
 }
 
+function persistTabsStorage() {
+    try {
+        localStorage.setItem(STORAGE.tabs, JSON.stringify(tabs));
+        localStorage.setItem(STORAGE.activeTabId, activeTabId);
+    } catch (err) {
+        console.warn('Failed to save tabs to localStorage', err);
+    }
+}
+
 function saveTabs() {
     const current = getActiveTab();
-    if (current) {
+    if (current && refs.noteTitle && refs.sourceInput) {
         current.title = refs.noteTitle.value.trim() || 'Untitled Topic';
         current.content = refs.sourceInput.value;
         current.updatedAt = Date.now();
     }
-    localStorage.setItem(STORAGE.tabs, JSON.stringify(tabs));
-    localStorage.setItem(STORAGE.activeTabId, activeTabId);
+    persistTabsStorage();
 }
 
 function getActiveTab() {
@@ -513,19 +542,21 @@ function createTab(title = 'New Topic', content = '', switchTo = true) {
     const newId = 'tab_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
     const newTab = {
         id: newId,
-        title,
-        content,
+        title: title || 'New Topic',
+        content: content || '',
         updatedAt: Date.now()
     };
 
     tabs.push(newTab);
-    saveTabs();
+    persistTabsStorage();
     renderTabsList();
 
     if (switchTo) {
         activateTab(newId, true);
-        refs.noteTitle.focus();
-        refs.noteTitle.select();
+        if (refs.noteTitle) {
+            refs.noteTitle.focus();
+            refs.noteTitle.select();
+        }
         toast('New topic tab opened');
     }
 }
@@ -555,7 +586,7 @@ function activateTab(tabId, animate = true) {
     markSaved();
 
     if (animate) {
-        refs.sourceInput.focus();
+        refs.sourceInput.focus({ preventScroll: true });
     }
 }
 
@@ -612,8 +643,8 @@ function renderTabsList() {
 
         item.innerHTML = `
             <span class="tab-title">${escapeHtml(tab.title || 'Untitled Topic')}</span>
-            <button class="tab-close" type="button" title="Close topic tab">
-                <i data-lucide="x"></i>
+            <button class="tab-close" type="button" title="Close topic tab" aria-label="Close topic tab">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
         `;
 
@@ -2166,7 +2197,7 @@ function closeCommandPalette() {
 
 function buildCommandPaletteItems() {
     commandPaletteItems = [
-        { icon: 'plus', title: 'New Topic Tab', desc: 'Open a blank tab for another topic', shortcut: 'Ctrl+Alt+T', action: () => createTab() },
+        { icon: 'plus', title: 'New Topic Tab', desc: 'Open a blank tab for another topic', shortcut: 'Alt+N', action: () => createTab() },
         { icon: 'x', title: 'Close Current Tab', desc: 'Close this topic tab', shortcut: 'Ctrl+Alt+W', action: () => closeTab(activeTabId) },
         { icon: 'copy', title: 'Duplicate Tab', desc: 'Duplicate current topic and equations', shortcut: '', action: duplicateCurrentTab },
         { icon: 'binary', title: 'Open LaTeX Symbol Palette', desc: 'Search and insert Greek, math, and matrix symbols', shortcut: 'Ctrl+/', action: openSymbolModal },

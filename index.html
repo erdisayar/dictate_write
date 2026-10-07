@@ -28,7 +28,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css"
         integrity="sha384-nH0MfJ44wi1dd7w6jinlyBgljjS8EJAh2JBoRad8a3VDw2K69vfaaqm4WnR+gXtA" crossorigin="anonymous">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20261007_02">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.js"
         integrity="sha384-CwjPRVHTvLiMBFjEoij+QZViMV5rhTOIp7CJzl24JEqpRDA1sJFHVXXLURktbYYp"
         crossorigin="anonymous"></script>
@@ -38,7 +38,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script defer src="https://unpkg.com/lucide@latest"></script>
-    <script defer src="app.js"></script>
+    <script defer src="app.js?v=20261007_02"></script>
 </head>
 
 <body>
@@ -98,8 +98,8 @@
                 <div class="tabs-list" id="tabsList" role="tablist">
                     <!-- Tabs rendered dynamically -->
                 </div>
-                <button class="tab-add-btn" id="addTabBtn" type="button" title="Open new topic tab (Ctrl+Alt+T)">
-                    <i data-lucide="plus"></i>
+                <button class="tab-add-btn" id="addTabBtn" type="button" title="Open new topic tab (Alt+N or click +)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     <span>New Tab</span>
                 </button>
             </div>
@@ -394,7 +394,7 @@
                 <div class="shortcuts-grid">
                     <div class="shortcut-section">
                         <h3>Tabs & Topics</h3>
-                        <div class="shortcut-row"><span>New Topic Tab</span><kbd>Ctrl + Alt + T</kbd></div>
+                        <div class="shortcut-row"><span>New Topic Tab</span><kbd>Alt + N</kbd></div>
                         <div class="shortcut-row"><span>Close Current Tab</span><kbd>Ctrl + Alt + W</kbd></div>
                         <div class="shortcut-row"><span>Command Palette</span><kbd>Ctrl + K</kbd></div>
                     </div>

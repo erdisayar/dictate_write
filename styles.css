@@ -209,21 +209,18 @@ button {
 .tab-strip {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: 6px;
     overflow-x: auto;
-    scrollbar-width: thin;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     flex: 1;
     min-width: 0;
     padding-bottom: 0;
 }
 
 .tab-strip::-webkit-scrollbar {
-    height: 4px;
-}
-
-.tab-strip::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 4px;
+    display: none;
 }
 
 .tabs-list {
@@ -235,8 +232,9 @@ button {
 
 .tab-item {
     min-height: 36px;
-    max-width: 200px;
-    min-width: 120px;
+    height: 36px;
+    max-width: 240px;
+    min-width: 110px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -251,6 +249,7 @@ button {
     position: relative;
     user-select: none;
     margin-bottom: -1px;
+    box-sizing: border-box;
 }
 
 .tab-item:hover {
@@ -278,8 +277,10 @@ button {
 }
 
 .tab-close {
-    width: 18px;
-    height: 18px;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
     border-radius: 4px;
     display: grid;
     place-items: center;
@@ -288,8 +289,9 @@ button {
     padding: 0;
     color: var(--subtle);
     cursor: pointer;
-    opacity: 0.6;
+    opacity: 0.7;
     transition: all var(--transition);
+    flex-shrink: 0;
 }
 
 .tab-close:hover {
@@ -301,23 +303,31 @@ button {
 .tab-close svg {
     width: 12px;
     height: 12px;
+    stroke-width: 2.4;
+    display: block;
 }
 
 .tab-add-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 32px;
     min-height: 32px;
     padding: 0 12px;
     border-radius: var(--radius-sm);
     border: 1px dashed var(--border);
     background: transparent;
     color: var(--accent);
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
+    font-family: inherit;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    gap: 6px;
     cursor: pointer;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     flex-shrink: 0;
+    user-select: none;
     transition: all var(--transition);
 }
 
@@ -325,18 +335,25 @@ button {
     background: var(--accent-soft);
     border-color: var(--accent);
     border-style: solid;
+    color: var(--accent);
+}
+
+.tab-add-btn:active {
+    transform: translateY(1px);
 }
 
 .tab-add-btn svg {
     width: 14px;
     height: 14px;
+    stroke-width: 2.2;
+    flex-shrink: 0;
 }
 
 .tab-strip-actions {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding-bottom: 4px;
+    padding-bottom: 3px;
     flex-shrink: 0;
 }
 
