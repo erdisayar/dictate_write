@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temporary LaTeX Notes</title>
-    <meta name="description" content="A comfortable writing space for post-dictation correction, LaTeX notes, and equations.">
+    <title>DictateWrite — Multi-Topic LaTeX Writing Studio</title>
+    <meta name="description" content="A comfortable multi-tab writing space for post-dictation correction, LaTeX notes, and equations.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Nunito:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
@@ -43,27 +43,48 @@
 
 <body>
     <div class="app">
+        <!-- Top Navigation Bar -->
         <header class="topbar">
             <div class="brand">
                 <div class="brand-mark" aria-hidden="true">TeX</div>
                 <div>
-                    <h1 class="app-title">Temporary LaTeX Notes</h1>
-                    <p class="app-subtitle">A calm space to revise dictated text and write with LaTeX</p>
+                    <h1 class="app-title">DictateWrite</h1>
+                    <p class="app-subtitle">Multi-topic scratchpad for post-dictation editing & LaTeX notes</p>
                 </div>
             </div>
 
+            <div class="top-center-actions">
+                <!-- Quick Command Palette Button -->
+                <button class="btn search-pill-btn" id="openCommandPaletteBtn" type="button" title="Open Command Palette (Ctrl+K)">
+                    <i data-lucide="search"></i>
+                    <span>Commands</span>
+                    <kbd>Ctrl+K</kbd>
+                </button>
+                <button class="btn" id="openSymbolPaletteBtn" type="button" title="LaTeX Symbol Palette (Ctrl+/)">
+                    <i data-lucide="binary"></i>
+                    <span>Symbols</span>
+                </button>
+            </div>
+
             <div class="top-actions">
+                <!-- Keyboard Shortcuts Guide Button -->
+                <button class="btn icon-only" id="shortcutsBtn" type="button" title="Keyboard Shortcuts (?)">
+                    <i data-lucide="help-circle"></i>
+                </button>
+
+                <!-- Theme Toggle -->
                 <div class="segmented" role="group" aria-label="Theme">
-                    <button class="segment-btn" type="button" data-theme-choice="light">
+                    <button class="segment-btn" type="button" data-theme-choice="light" title="Light theme">
                         <i data-lucide="sun"></i>
                         <span>Light</span>
                     </button>
-                    <button class="segment-btn" type="button" data-theme-choice="dark">
+                    <button class="segment-btn" type="button" data-theme-choice="dark" title="Dark theme">
                         <i data-lucide="moon"></i>
                         <span>Dark</span>
                     </button>
                 </div>
 
+                <!-- Status Pill -->
                 <div class="status-pill" id="statusPill" aria-live="polite">
                     <span class="status-dot" aria-hidden="true"></span>
                     <span id="statusText">Ready</span>
@@ -71,82 +92,130 @@
             </div>
         </header>
 
+        <!-- Document Tabs Strip (Browser-style multi-topic tabs) -->
+        <nav class="tab-strip-wrapper" aria-label="Open document topics">
+            <div class="tab-strip">
+                <div class="tabs-list" id="tabsList" role="tablist">
+                    <!-- Tabs rendered dynamically -->
+                </div>
+                <button class="tab-add-btn" id="addTabBtn" type="button" title="Open new topic tab (Ctrl+Alt+T)">
+                    <i data-lucide="plus"></i>
+                    <span>New Tab</span>
+                </button>
+            </div>
+            <div class="tab-strip-actions">
+                <button class="btn small" id="duplicateTabBtn" type="button" title="Duplicate current tab">
+                    <i data-lucide="copy"></i>
+                    <span>Duplicate</span>
+                </button>
+                <button class="btn small" id="exportBackupBtn" type="button" title="Export all tabs to JSON">
+                    <i data-lucide="download"></i>
+                    <span>Backup</span>
+                </button>
+                <button class="btn small" id="importBackupBtn" type="button" title="Import tabs from JSON">
+                    <i data-lucide="upload"></i>
+                    <span>Import</span>
+                </button>
+            </div>
+        </nav>
+
         <main>
+            <!-- Note Controls Toolbar -->
             <section class="toolbar" aria-label="Note controls">
                 <label class="title-field" for="noteTitle">
-                    <span>Note Title</span>
-                    <input id="noteTitle" type="text" autocomplete="off">
+                    <span>Topic / Title</span>
+                    <input id="noteTitle" type="text" autocomplete="off" placeholder="Topic title">
                 </label>
 
                 <div class="toolbar-actions" aria-label="Main actions">
-                    <button class="btn primary" id="renderBtn" type="button">
-                        <i data-lucide="refresh-cw"></i>
-                        <span>Render</span>
-                    </button>
-                    <button class="btn" id="loadSampleBtn" type="button">
-                        <i data-lucide="sparkles"></i>
-                        <span>Sample</span>
-                    </button>
-                    <button class="btn" id="openFileBtn" type="button">
-                        <i data-lucide="folder-open"></i>
-                        <span>Open</span>
-                    </button>
-                    <button class="btn" id="downloadTexBtn" type="button">
-                        <i data-lucide="download"></i>
-                        <span>.tex</span>
-                    </button>
-                    <button class="btn" id="downloadHtmlBtn" type="button">
-                        <i data-lucide="file-down"></i>
-                        <span>HTML</span>
-                    </button>
-                    <button class="btn" id="downloadPdfBtn" type="button">
-                        <i data-lucide="file-text"></i>
-                        <span>PDF</span>
-                    </button>
-                    <button class="btn" id="copyPngBtn" type="button" title="Copy the rendered note as PNG">
-                        <i data-lucide="image"></i>
-                        <span>Copy PNG</span>
-                    </button>
-                    <button class="btn" id="copySvgBtn" type="button" title="Copy the rendered note as SVG">
-                        <i data-lucide="panel-top"></i>
-                        <span>Copy SVG</span>
-                    </button>
-                    <button class="btn danger" id="clearBtn" type="button">
+                    <div class="action-btn-group">
+                        <button class="btn primary" id="renderBtn" type="button" title="Render preview (Ctrl+Enter)">
+                            <i data-lucide="refresh-cw"></i>
+                            <span>Render</span>
+                        </button>
+                        <button class="btn" id="loadSampleBtn" type="button" title="Load sample LaTeX math">
+                            <i data-lucide="file-code"></i>
+                            <span>Sample</span>
+                        </button>
+                        <button class="btn" id="openFileBtn" type="button" title="Open text/LaTeX file">
+                            <i data-lucide="folder-open"></i>
+                            <span>Open</span>
+                        </button>
+                    </div>
+
+                    <!-- Export Options -->
+                    <div class="action-btn-group">
+                        <button class="btn" id="downloadTexBtn" type="button" title="Download .tex source">
+                            <i data-lucide="download"></i>
+                            <span>.tex</span>
+                        </button>
+                        <button class="btn" id="downloadHtmlBtn" type="button" title="Download standalone HTML">
+                            <i data-lucide="file-down"></i>
+                            <span>HTML</span>
+                        </button>
+                        <button class="btn" id="downloadPdfBtn" type="button" title="Download printable PDF">
+                            <i data-lucide="file-text"></i>
+                            <span>PDF</span>
+                        </button>
+                        <button class="btn" id="copyPngBtn" type="button" title="Copy rendered note as PNG">
+                            <i data-lucide="image"></i>
+                            <span>PNG</span>
+                        </button>
+                        <button class="btn" id="copySvgBtn" type="button" title="Copy rendered note as SVG">
+                            <i data-lucide="panel-top"></i>
+                            <span>SVG</span>
+                        </button>
+                    </div>
+
+                    <button class="btn danger" id="clearBtn" type="button" title="Clear current note">
                         <i data-lucide="trash-2"></i>
                         <span>Clear</span>
                     </button>
                 </div>
 
+                <!-- LaTeX Snippet Chips -->
                 <div class="snippet-row" aria-label="Insert snippets">
                     <span class="snippet-label">Insert</span>
-                    <button class="chip-btn" type="button" data-snippet="inlineMath">
+                    <button class="chip-btn" type="button" data-snippet="inlineMath" title="Inline math $...$">
                         <i data-lucide="sigma"></i>
-                        <span>Inline</span>
+                        <span>$Inline$</span>
                     </button>
-                    <button class="chip-btn" type="button" data-snippet="displayMath">
+                    <button class="chip-btn" type="button" data-snippet="displayMath" title="Display math \[...\]">
                         <i data-lucide="braces"></i>
-                        <span>Display</span>
+                        <span>\[Display\]</span>
                     </button>
-                    <button class="chip-btn" type="button" data-snippet="align">
+                    <button class="chip-btn" type="button" data-snippet="fraction" title="Fraction \frac{a}{b}">
+                        <span>\frac</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="sqrt" title="Square root \sqrt{x}">
+                        <span>\sqrt</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="align" title="Align environment">
                         <i data-lucide="align-left"></i>
                         <span>Align</span>
                     </button>
-                    <button class="chip-btn" type="button" data-snippet="itemize">
+                    <button class="chip-btn" type="button" data-snippet="itemize" title="Bulleted list">
                         <i data-lucide="list"></i>
                         <span>List</span>
                     </button>
-                    <button class="chip-btn" type="button" data-snippet="section">
+                    <button class="chip-btn" type="button" data-snippet="section" title="Section heading">
                         <i data-lucide="heading-2"></i>
                         <span>Section</span>
                     </button>
-                    <button class="chip-btn" type="button" data-snippet="bold">
+                    <button class="chip-btn" type="button" data-snippet="bold" title="Bold text">
                         <i data-lucide="bold"></i>
                         <span>Bold</span>
+                    </button>
+                    <button class="chip-btn" type="button" data-snippet="italic" title="Italic text">
+                        <i data-lucide="italic"></i>
+                        <span>Italic</span>
                     </button>
                 </div>
             </section>
 
+            <!-- Dual-Pane Workspace -->
             <section class="workspace" aria-label="LaTeX note workspace">
+                <!-- Source Editor Pane -->
                 <section class="pane editor-pane" aria-label="Source editor">
                     <div class="pane-header">
                         <div>
@@ -161,6 +230,10 @@
                             </div>
                         </div>
                         <div class="pane-actions">
+                            <button class="btn small" id="syncedScrollBtn" type="button" title="Toggle Synchronized Scrolling">
+                                <i data-lucide="chevrons-up-down"></i>
+                                <span>Sync Scroll: On</span>
+                            </button>
                             <button class="btn small" id="focusModeBtn" type="button" title="Expand editor (hide preview)">
                                 <i data-lucide="maximize-2"></i>
                                 <span>Focus</span>
@@ -173,7 +246,7 @@
                     </div>
 
                     <textarea id="sourceInput" spellcheck="true"
-                        placeholder="Paste dictated text here, then revise and polish. Use $inline math$ or display equations when needed."></textarea>
+                        placeholder="Paste your dictated words here, add thoughts, edit typos, and write with $inline math$ or display equations. Use tabs above to jump between different topics."></textarea>
 
                     <div class="pane-footer">
                         <div class="footer-controls">
@@ -232,6 +305,7 @@
                     </div>
                 </section>
 
+                <!-- Rendered Preview Pane -->
                 <section class="pane preview-pane" aria-label="Rendered preview">
                     <div class="pane-header">
                         <div>
@@ -242,7 +316,7 @@
                             </div>
                         </div>
                         <div class="pane-actions">
-                            <button class="btn small" id="copyPreviewBtn" type="button">
+                            <button class="btn small" id="copyPreviewBtn" type="button" title="Copy rendered text">
                                 <i data-lucide="clipboard-copy"></i>
                                 <span>Copy Text</span>
                             </button>
@@ -256,8 +330,102 @@
         </main>
     </div>
 
+    <!-- Hidden file inputs -->
     <input class="hidden-input" id="fileInput" type="file" accept=".tex,.txt,.md,text/*">
+    <input class="hidden-input" id="backupFileInput" type="file" accept=".json">
+
+    <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- MODAL 1: LaTeX Symbol Palette Modal (Ctrl+/) -->
+    <div class="modal-backdrop" id="symbolModalBackdrop" hidden>
+        <div class="modal-card modal-medium" role="dialog" aria-modal="true" aria-labelledby="symbolModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="symbolModalTitle">LaTeX Symbol Palette</h2>
+                    <p class="modal-subtitle">Click any symbol or formula to insert at your cursor</p>
+                </div>
+                <button class="btn icon-only" id="closeSymbolModalBtn" type="button"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="symbol-search-wrap">
+                    <i data-lucide="search"></i>
+                    <input id="symbolSearchInput" type="text" placeholder="Search symbols (e.g. alpha, sum, integral, leq)..." autocomplete="off">
+                </div>
+                <div class="symbol-category-tabs" id="symbolCategoryTabs">
+                    <button class="symbol-tab active" data-category="greek">Greek</button>
+                    <button class="symbol-tab" data-category="calculus">Calculus & Sums</button>
+                    <button class="symbol-tab" data-category="relations">Relations & Sets</button>
+                    <button class="symbol-tab" data-category="arrows">Arrows & Logic</button>
+                    <button class="symbol-tab" data-category="delimiters">Matrices & Fractions</button>
+                </div>
+                <div class="symbol-grid" id="symbolGrid">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Command Palette Modal (Ctrl+K) -->
+    <div class="modal-backdrop" id="commandModalBackdrop" hidden>
+        <div class="modal-card modal-command-palette" role="dialog" aria-modal="true" aria-labelledby="commandModalTitle">
+            <div class="command-search-header">
+                <i data-lucide="search" class="command-search-icon"></i>
+                <input id="commandSearchInput" type="text" placeholder="Type a command or jump to topic..." autocomplete="off">
+                <kbd class="esc-kbd">ESC</kbd>
+            </div>
+            <div class="command-list" id="commandList" role="listbox">
+                <!-- Commands populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Keyboard Shortcuts Modal (?) -->
+    <div class="modal-backdrop" id="shortcutsModalBackdrop" hidden>
+        <div class="modal-card modal-medium" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="shortcutsModalTitle">Keyboard Shortcuts</h2>
+                    <p class="modal-subtitle">Quick reference for high-speed multi-topic writing</p>
+                </div>
+                <button class="btn icon-only" id="closeShortcutsModalBtn" type="button"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcuts-grid">
+                    <div class="shortcut-section">
+                        <h3>Tabs & Topics</h3>
+                        <div class="shortcut-row"><span>New Topic Tab</span><kbd>Ctrl + Alt + T</kbd></div>
+                        <div class="shortcut-row"><span>Close Current Tab</span><kbd>Ctrl + Alt + W</kbd></div>
+                        <div class="shortcut-row"><span>Command Palette</span><kbd>Ctrl + K</kbd></div>
+                    </div>
+
+                    <div class="shortcut-section">
+                        <h3>LaTeX & Tools</h3>
+                        <div class="shortcut-row"><span>LaTeX Symbol Palette</span><kbd>Ctrl + /</kbd></div>
+                        <div class="shortcut-row"><span>Render Preview</span><kbd>Ctrl + Enter</kbd></div>
+                        <div class="shortcut-row"><span>Toggle Focus Mode</span><kbd>Ctrl + E</kbd></div>
+                        <div class="shortcut-row"><span>Bold / Italic</span><kbd>Ctrl + B / I</kbd></div>
+                    </div>
+
+                    <div class="shortcut-section">
+                        <h3>Editing Navigation</h3>
+                        <div class="shortcut-row"><span>Indent 4 Spaces</span><kbd>Tab</kbd></div>
+                        <div class="shortcut-row"><span>Move Word Backward/Forward</span><kbd>Alt + B / F</kbd></div>
+                        <div class="shortcut-row"><span>Delete Word</span><kbd>Alt + Backspace</kbd></div>
+                        <div class="shortcut-row"><span>Copy Source (No selection)</span><kbd>Ctrl + C</kbd></div>
+                    </div>
+
+                    <div class="shortcut-section">
+                        <h3>Vim & Emacs Modes</h3>
+                        <div class="shortcut-row"><span>Vim Normal / Insert</span><kbd>Esc / i</kbd></div>
+                        <div class="shortcut-row"><span>Vim Delete Line</span><kbd>d d</kbd></div>
+                        <div class="shortcut-row"><span>Emacs Line Start / End</span><kbd>Ctrl + A / E</kbd></div>
+                        <div class="shortcut-row"><span>Emacs Kill to Line End</span><kbd>Ctrl + K</kbd></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
